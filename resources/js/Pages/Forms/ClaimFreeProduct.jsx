@@ -996,7 +996,13 @@ export default function ProductCapture({
 
           {/* Communication Preferences Section */}
           {formattedCommunicationChannels && formattedCommunicationChannels.length > 0 && (
-            <div className="mt-8">
+            <div className={`mt-8 ${
+                !isLoading && !isCompletionTransitioning ? 'animate-fadeInUp' : 
+                isCompletionTransitioning ? 'animate-fadeOutDown' : ''
+              }`} style={{ 
+                animationDelay: !isLoading && !isCompletionTransitioning ? '0.5s' : 
+                              isCompletionTransitioning ? '0.4s' : '0s' 
+              }}>
               <h2 className="text-base font-semibold leading-7 text-gray-900 dark:text-white">Communication Preferences</h2>
               <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
                 Please let us know how you would like to hear from us.
