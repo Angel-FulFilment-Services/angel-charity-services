@@ -20,23 +20,18 @@ import {
   IdentificationIcon,
   GiftIcon,
   CheckCircleIcon,
+  XCircleIcon,
+  XMarkIcon,
   EyeIcon,
   CogIcon,
   DocumentTextIcon,
-  ClipboardDocumentListIcon
+  ClipboardDocumentListIcon,
+  LinkIcon
 } from '@heroicons/react/24/outline';
 import { ring } from 'ldrs';
-import { XMarkIcon } from '@heroicons/react/20/solid';
 
 
 export default function CreateClaimFreeProductTemplate({ 
-  // Template props  
-  template_name = "Sample Template",
-  guid, // Add guid prop
-  title,
-  surname,
-  client_image,
-  client_name,
   clients,
   loading_title,
   loading_message,
@@ -44,15 +39,8 @@ export default function CreateClaimFreeProductTemplate({
   completed_message,
   product_title,
   product_message,
-  product_name,
-  product_image,
-  client_url,
-  contact_url,
-  privacy_url,
   privacy_notice,
-  theme_colour, // New prop for custom theme color (hex or rgb)
-  communication_channels = [], // Array of communication channel objects
-  status
+  theme_colour,
 }) {
 
   // Make theme color dynamic and editable
@@ -63,18 +51,6 @@ export default function CreateClaimFreeProductTemplate({
     setThemeColour(newColour);
     handleTemplateChange('theme_colour', newColour);
   };
-
-  // Process and format communication channels for CheckboxGroupInput
-  const formattedCommunicationChannels = communication_channels
-    ? communication_channels
-        .filter(channel => channel && channel.channel && channel.label) // Filter out invalid entries
-        .map(channel => ({
-          value: channel.channel,
-          label: channel.label,
-          type: channel.type || 'opt-in' // Default to opt-in if type not specified
-        }))
-    : [];
-
 
   const [animationDataLoading, setAnimationDataLoading] = useState(null);
   const [animationDataSuccess, setAnimationDataSuccess] = useState(null);
@@ -88,6 +64,11 @@ export default function CreateClaimFreeProductTemplate({
   const handlePreviewModeChange = (newMode) => {
     // Always increment animation key to restart Lottie animations
     setAnimationKey(prev => prev + 1);
+    
+    // Scroll to top instantly when switching to prerequisites or form
+    if (newMode === 'prerequisites' || newMode === 'form') {
+      window.scrollTo(0, 0);
+    }
     
     if (newMode === previewMode) {
       // Same mode - just restart animations
@@ -193,7 +174,8 @@ export default function CreateClaimFreeProductTemplate({
 
     // Create preview URL and store file in form data
     const previewUrl = URL.createObjectURL(file);
-    handlePrerequisitesChange('product_image', file);
+    handlePrerequisitesChange('product_image', previewUrl);
+    handlePrerequisitesChange('product_image_file', file);
     
     // Show success message
     toast.success('Image uploaded successfully!', {
@@ -284,7 +266,7 @@ export default function CreateClaimFreeProductTemplate({
 
     // Create preview URL and store file in form data
     const previewUrl = URL.createObjectURL(file);
-    handlePrerequisitesChange('custom_image', file);
+    handlePrerequisitesChange('client_image_file', file);
     handlePrerequisitesChange('client_image', previewUrl);
     
     // Show success message
@@ -332,7 +314,7 @@ export default function CreateClaimFreeProductTemplate({
   // Handle remove client image
   const handleRemoveClientImage = (e) => {
     e.stopPropagation(); // Prevent triggering upload click
-    handlePrerequisitesChange('custom_image', null);
+    handlePrerequisitesChange('client_image_file', null);
     handlePrerequisitesChange('client_image', null);
     if (clientFileInputRef.current) {
       clientFileInputRef.current.value = ''; // Clear file input
@@ -353,6 +335,7 @@ export default function CreateClaimFreeProductTemplate({
   const handleRemoveImage = (e) => {
     e.stopPropagation(); // Prevent triggering upload click
     handlePrerequisitesChange('product_image', null);
+    handlePrerequisitesChange('product_image_file', null);
     if (fileInputRef.current) {
       fileInputRef.current.value = ''; // Clear file input
     }
@@ -374,9 +357,13 @@ export default function CreateClaimFreeProductTemplate({
       client_ref: '',
       client_name: '',
       client_image: null,
-      custom_image: '',
+      client_image_file: '',
       product_name: '',
-      product_image: null
+      product_image: null,
+      product_image_file: '',
+      client_url: '',
+      contact_url: '',
+      privacy_url: '',
     },
     // Template content
     template: {
@@ -388,9 +375,12 @@ export default function CreateClaimFreeProductTemplate({
       form_message: product_message,
       privacy_notice: privacy_notice,
       theme_colour: theme_colour || '#008DA9',
-      client_url: client_url,
-      contact_url: contact_url,
-      privacy_url: privacy_url
+      communication_preferences: {
+        post: { enabled: true, value: 'post', label: 'I do not want to receive updates by post', type: 'opt-out' },
+        phone: { enabled: true, value: 'phone', label: 'I do not want to receive updates by telephone', type: 'opt-out' },
+        email: { enabled: true, value: 'email', label: 'I would like to receive email updates', type: 'opt-in' },
+        sms: { enabled: true, value: 'sms', label: 'I would like to receive SMS messages', type: 'opt-in' }
+      }
     }
   });
 
@@ -415,13 +405,29 @@ export default function CreateClaimFreeProductTemplate({
     }));
   };
 
+  const handleCommunicationPreferenceChange = (type, field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      template: {
+        ...prev.template,
+        communication_preferences: {
+          ...prev.template.communication_preferences,
+          [type]: {
+            ...prev.template.communication_preferences[type],
+            [field]: value
+          }
+        }
+      }
+    }));
+  };
+
   const handleClientChange = (client) => {
     // Find the selected client to get both ref and name
     const selectedClient = clients?.find(c => c.value.trim() === client.trim());
     if (selectedClient) {
       handlePrerequisitesChange('client_ref', selectedClient.client_ref);
       handlePrerequisitesChange('client_name', client);
-      if(!formData.prerequisites.custom_image) {
+      if(!formData.prerequisites.client_image_file) {
         // Check if image exists using Image object (no CORS issues)
         const imageUrl = r2bucketURL + 'logos/' + selectedClient.client_ref.toLowerCase() + '-logo.png';
         const img = new Image();
@@ -455,6 +461,61 @@ export default function CreateClaimFreeProductTemplate({
 
   return (
     <div className="h-screen bg-gray-200 dark:bg-gray-900 relative overflow-hidden">
+      {/* Fixed Right Sidebar - Substitution Key */}
+      <div className="fixed top-16 right-0 w-80 h-[calc(100vh-4rem)] bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 shadow-lg z-[999] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex items-center space-x-2 mb-6">
+            <ClipboardDocumentListIcon className="h-5 w-5 text-theme-600 dark:text-theme-500" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Substitution Key
+            </h2>
+          </div>
+          
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Use these placeholders in your text fields. They will be automatically replaced with the actual values:
+            </p>
+            
+            {/* Substitution items */}
+            <div className="space-y-3">
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                <div className="text-sm text-theme-400 dark:text-theme-400 mb-1 font-bold italic">
+                  {'{'}{'{'}product_name{'}'}{'}'}                </div>
+                <div className="text-xs text-gray-600 dark:text-gray-400">
+                  Name of the product
+                </div>
+              </div>
+              
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                <div className="text-sm text-theme-400 dark:text-theme-400 mb-1 font-bold italic">
+                  {'{'}{'{'}client_name{'}'}{'}'}                </div>
+                <div className="text-xs text-gray-600 dark:text-gray-400">
+                  Name of the client
+                </div>
+              </div>
+              
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                <div className="text-sm text-theme-400 dark:text-theme-400 mb-1 font-bold italic">
+                  {'{'}{'{'}salutation{'}'}{'}'}                </div>
+                <div className="text-xs text-gray-600 dark:text-gray-400">
+                  Name of the supporter
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-6 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex items-start space-x-2">
+                <svg className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                <div className="text-xs text-blue-700 dark:text-blue-300">
+                  <strong>Tip:</strong> Copy and paste these placeholders into your text fields. They will be replaced with real data when the form is displayed to users.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
       
       {/* Template Configuration Header */}
       <div className="fixed top-0 left-0 right-0 z-[1000] bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
@@ -556,10 +617,9 @@ export default function CreateClaimFreeProductTemplate({
       <div className="">
         {/* Loading Screen Overlay */}
         <div 
-          className={`fixed inset-0 flex items-center justify-center z-50 bg-gray-200 dark:bg-gray-900 transition-all duration-300 h-screen w-screen ${
+          className={`fixed top-16 left-0 right-80 bottom-0 flex items-center justify-center z-50 bg-gray-200 dark:bg-gray-900 transition-all duration-300 ${
             previewMode === 'loading' && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
-          style={{ top: '64px' }}
         >
         <div className="text-center w-full max-w-3xl">
           {/* Gift Box Animation */}
@@ -614,10 +674,9 @@ export default function CreateClaimFreeProductTemplate({
 
       {/* Completion Screen Overlay */}
       <div 
-        className={`fixed inset-0 flex items-center justify-center z-50 bg-gray-200 dark:bg-gray-900 transition-all duration-300 h-screen w-screen ${
+        className={`fixed top-16 left-0 right-80 bottom-0 flex items-center justify-center z-50 bg-gray-200 dark:bg-gray-900 transition-all duration-300 ${
           previewMode === 'completed' && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
-        style={{ top: '64px' }}
       >
         <div className="text-center w-full max-w-4xl">
           {/* Success Animation */}
@@ -677,10 +736,9 @@ export default function CreateClaimFreeProductTemplate({
 
       {/* Prerequisites Content */}
       <div 
-        className={`fixed inset-0 overflow-y-auto z-40 bg-gray-200 dark:bg-gray-900 transition-all duration-300 h-screen w-screen ${
+        className={`fixed top-16 left-0 right-80 bottom-0 overflow-y-auto z-40 bg-gray-200 dark:bg-gray-900 transition-all duration-300 ${
           previewMode === 'prerequisites' && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
-        style={{ top: '64px', paddingBottom: '64px' }}
       >
         <div className={`mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8 ${previewMode === 'prerequisites' && !isTransitioning ? 'animate-fadeInUp' : ''}`}
              style={{ animationDelay: previewMode === 'prerequisites' && !isTransitioning ? '0.1s' : '0s' }}>
@@ -694,7 +752,7 @@ export default function CreateClaimFreeProductTemplate({
                 <h1 className="text-base font-semibold tracking-tight text-gray-900 dark:text-white text-left">
                   Template Prerequisites
                 </h1>
-                <p className="mt-4 text-sm text-gray-600 dark:text-gray-300 text-left">
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-300 text-left">
                   Configure the basic settings and requirements for your template before proceeding to design.
                 </p>
               </div>
@@ -736,7 +794,7 @@ export default function CreateClaimFreeProductTemplate({
 
                   <div className="mt-6">
                     {/* Client Image Upload Area */}
-                    <div className="mb-8 mx-auto relative">
+                    <div className="mb-2 mx-auto relative">
                       {formData.prerequisites.client_image ? (
                         // Show uploaded/existing image
                         <div className="relative max-w-xs">
@@ -821,7 +879,7 @@ export default function CreateClaimFreeProductTemplate({
                 </div>
 
                 {/* Product Information Section */}
-                <div className="">
+                <div className="border-b border-gray-900/10 dark:border-gray-700/50 pb-8">
                   <h2 className="text-base font-semibold leading-7 text-gray-900 dark:text-white">Product Information</h2>
                   <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
                     Define the product that will be featured in this template.
@@ -845,6 +903,64 @@ export default function CreateClaimFreeProductTemplate({
                     </div>
                   </div>
                 </div>
+
+                {/* URLs Section */}
+                <div className="">
+                  <h2 className="text-base font-semibold leading-7 text-gray-900 dark:text-white">Template URLs</h2>
+                  <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
+                    Configure the website links that will appear in the template footer.
+                  </p>
+
+                  <div className="mt-6 grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-6">
+                    <div className="sm:col-span-6">
+                      <TextInput
+                        id="client-url"
+                        label="Client Website URL"
+                        autoComplete="url"
+                        placeholder="https://www.example.org"
+                        disabled={false}
+                        currentState={formData.prerequisites.client_url}
+                        onTextChange={(value) => handlePrerequisitesChange('client_url', value)}
+                        Icon={LinkIcon}
+                      />
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        The main website URL for the client organization.
+                      </p>
+                    </div>
+
+                    <div className="sm:col-span-3">
+                      <TextInput
+                        id="contact-url"
+                        label="Contact URL"
+                        autoComplete="url"
+                        placeholder="https://www.example.org/contact"
+                        disabled={false}
+                        currentState={formData.prerequisites.contact_url}
+                        onTextChange={(value) => handlePrerequisitesChange('contact_url', value)}
+                        Icon={LinkIcon}
+                      />
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        Link to the contact or support page.
+                      </p>
+                    </div>
+
+                    <div className="sm:col-span-3">
+                      <TextInput
+                        id="privacy-url"
+                        label="Privacy Policy URL"
+                        autoComplete="url"
+                        placeholder="https://www.example.org/privacy"
+                        disabled={false}
+                        currentState={formData.prerequisites.privacy_url}
+                        onTextChange={(value) => handlePrerequisitesChange('privacy_url', value)}
+                        Icon={LinkIcon}
+                      />
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        Link to the privacy policy page.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </form>
             </div>
           </div>
@@ -854,10 +970,9 @@ export default function CreateClaimFreeProductTemplate({
       {/* Main Form Content */}
       <div 
          ref={scrollRef}
-        className={`fixed inset-0 overflow-y-auto z-40 bg-gray-200 dark:bg-gray-900 transition-all duration-300 h-screen w-screen ${
+        className={`fixed top-16 left-0 right-80 bottom-0 overflow-y-auto z-40 bg-gray-200 dark:bg-gray-900 transition-all duration-300 ${
           previewMode === 'form' && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
-        style={{ top: '64px', paddingBottom: '64px' }}
       >
         {/* Simple Header with Logo */}
         <header className={`py-10 ${previewMode === 'form' && !isTransitioning ? 'animate-fadeInUp' : ''}`}>
@@ -999,7 +1114,7 @@ export default function CreateClaimFreeProductTemplate({
                 <div className="border-b border-t border-gray-900/10 dark:border-gray-700/50 pb-8 pt-4">
                   <h2 className="text-base font-semibold leading-7 text-gray-900 dark:text-white">Delivery Details</h2>
                   <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
-                    Please provide the name for delivery of your free <b><i>{"{{product_name}}"}</i></b>.
+                    Please provide the name for delivery of your free <span className="text-theme-400"><b><i>{"{{product_name}}"}</i></b></span>.
                   </p>
 
                   <div className="mt-8 grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-6">
@@ -1047,7 +1162,7 @@ export default function CreateClaimFreeProductTemplate({
                 <div className="">
                   <h2 className="text-base font-semibold leading-7 text-gray-900 dark:text-white">Delivery Address</h2>
                   <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
-                    Where would you like us to deliver your free <b><i>{"{{product_name}}"}</i></b>?
+                    Where would you like us to deliver your free <span className="text-theme-400"><b><i>{"{{product_name}}"}</i></b></span>?
                   </p>
 
                   <div className="mt-8 grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-6">
@@ -1137,30 +1252,143 @@ export default function CreateClaimFreeProductTemplate({
               disabled={true}
               className="w-full flex justify-center items-center rounded-md px-3 py-4 text-sm font-semibold text-white shadow-sm bg-theme-400 cursor-not-allowed"
             >
-              <CheckCircleIcon className="h-5 w-5 text-white mr-2" />
-              Template Preview Mode
+              Claim My Free Product
             </button>
           </div>
 
           {/* Communication Preferences Section */}
-          {formattedCommunicationChannels && formattedCommunicationChannels.length > 0 && (
-            <div className="mt-8">
+          <div className={`mt-8 ${previewMode === 'form' && !isTransitioning ? 'animate-fadeInUp' : ''} overflow-hidden`}
+            style={{ animationDelay: previewMode === 'form' && !isTransitioning ? '0.4s' : '0s' }}>
+            <div className="">
               <h2 className="text-base font-semibold leading-7 text-gray-900 dark:text-white">Communication Preferences</h2>
               <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
                 Please let us know how you would like to hear from us.
               </p>
 
-              <div className="mt-4">
-                <CheckboxGroupInput
-                  id="communication-preferences"
-                  items={formattedCommunicationChannels}
-                  selectedItems={[]}
-                  onChange={() => {}}
-                  disabled={true}
-                />
+              <div className="mt-4 flex flex-col gap-y-1">
+                {/* Post Preference */}
+                <div className="flex items-center gap-x-2">
+                  <div className="inline h-6 w-6 -mt-1 cursor-pointer" onClick={() => handleCommunicationPreferenceChange('post', 'enabled', !formData.template.communication_preferences.post.enabled)}>
+                    {formData.template.communication_preferences.post.enabled ? (
+                      <CheckCircleIcon className="h-6 w-6 text-green-500 inline" title='Enabled' />
+                    ) : (
+                      <XCircleIcon className="h-6 w-6 text-red-500 inline" title='Disabled' />
+                    )}
+                  </div>
+                    <button title={formData.template.communication_preferences.post.type === 'opt-in' ? 'Opt In' : 'Opt Out'} className="bg-gray-100 border-gray-300 hover:bg-gray-200 border px-2 rounded h-6 shrink-0 text-sm font-semibold min-w-[4.5rem]" onClick={() => handleCommunicationPreferenceChange('post', 'type', formData.template.communication_preferences.post.type === 'opt-in' ? 'opt-out' : 'opt-in')}>
+                      {formData.template.communication_preferences.post.type === 'opt-in' ? 
+                        "Opt In"
+                        :
+                        "Opt Out"
+                      }
+                    </button>
+                  <div className="h-5 w-5 shrink-0 rounded border border-gray-500 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 flex items-center justify-center"></div>
+                  <div 
+                    className="text-sm leading-6 text-gray-900 dark:text-white flex w-full"
+                  >
+                    <InlineEditableText
+                      value={formData.template.communication_preferences.post.label}
+                      onChange={(value) => handleCommunicationPreferenceChange('post', 'label', value)}
+                      className="text-sm leading-6 text-gray-900 dark:text-white pt-[0.09rem]"
+                      placeholder="Enter post communication label..."
+                      padding={false}
+                    />
+                  </div>
+                </div>
+
+                {/* Phone Preference */}
+                <div className="flex items-center shrink-0 gap-x-2">
+                  <div className="inline h-6 w-6 -mt-1 cursor-pointer" onClick={() => handleCommunicationPreferenceChange('phone', 'enabled', !formData.template.communication_preferences.phone.enabled)}>
+                    {formData.template.communication_preferences.phone.enabled ? (
+                      <CheckCircleIcon className="h-6 w-6 text-green-500 inline" title='Enabled' />
+                    ) : (
+                      <XCircleIcon className="h-6 w-6 text-red-500 inline" title='Disabled' />
+                    )}
+                  </div>
+                  <button title={formData.template.communication_preferences.phone.type === 'opt-in' ? 'Opt In' : 'Opt Out'} className="bg-gray-100 border-gray-300 hover:bg-gray-200 border px-2 rounded h-6 shrink-0 text-sm font-semibold min-w-[4.5rem]" onClick={() => handleCommunicationPreferenceChange('phone', 'type', formData.template.communication_preferences.phone.type === 'opt-in' ? 'opt-out' : 'opt-in')}>
+                    {formData.template.communication_preferences.phone.type === 'opt-in' ? 
+                        "Opt In"
+                        :
+                        "Opt Out"
+                    }
+                  </button>
+                  <div className="h-5 w-5 shrink-0 rounded border border-gray-500 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 flex items-center justify-center"></div>
+                  <div 
+                    className="text-sm leading-6 text-gray-900 dark:text-white flex w-full"
+                  >
+                    <InlineEditableText
+                      value={formData.template.communication_preferences.phone.label}
+                      onChange={(value) => handleCommunicationPreferenceChange('phone', 'label', value)}
+                      className="text-sm leading-6 text-gray-900 dark:text-white pt-[0.09rem]"
+                      placeholder="Enter email communication label..."
+                      padding={false}
+                    />
+                  </div>
+                </div>
+
+                {/* Email Preference */}
+                <div className="flex items-center shrink-0 gap-x-2">
+                  <div className="inline h-6 w-6 -mt-1 cursor-pointer" onClick={() => handleCommunicationPreferenceChange('email', 'enabled', !formData.template.communication_preferences.email.enabled)}>
+                    {formData.template.communication_preferences.email.enabled ? (
+                      <CheckCircleIcon className="h-6 w-6 text-green-500 inline" title='Enabled' />
+                    ) : (
+                      <XCircleIcon className="h-6 w-6 text-red-500 inline" title='Disabled' />
+                    )}
+                  </div>
+                  <button title={formData.template.communication_preferences.email.type === 'opt-in' ? 'Opt In' : 'Opt Out'} className="bg-gray-100 border-gray-300 hover:bg-gray-200 border px-2 rounded h-6 shrink-0 text-sm font-semibold min-w-[4.5rem]" onClick={() => handleCommunicationPreferenceChange('email', 'type', formData.template.communication_preferences.email.type === 'opt-in' ? 'opt-out' : 'opt-in')}>
+                    {formData.template.communication_preferences.email.type === 'opt-in' ? 
+                        "Opt In"
+                        :
+                        "Opt Out"
+                    }
+                  </button>
+                  <div className="h-5 w-5 shrink-0 rounded border border-gray-500 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 flex items-center justify-center"></div>
+                  <div 
+                    className="text-sm leading-6 text-gray-900 dark:text-white flex w-full"
+                  >
+                    <InlineEditableText
+                      value={formData.template.communication_preferences.email.label}
+                      onChange={(value) => handleCommunicationPreferenceChange('email', 'label', value)}
+                      className="text-sm leading-6 text-gray-900 dark:text-white pt-[0.09rem]"
+                      placeholder="Enter email communication label..."
+                      padding={false}
+                    />
+                  </div>
+                </div>
+
+                {/* SMS Preference */}
+                <div className="flex items-center shrink-0 gap-x-2">
+                  <div className="inline h-6 w-6 -mt-1 cursor-pointer" onClick={() => handleCommunicationPreferenceChange('sms', 'enabled', !formData.template.communication_preferences.sms.enabled)}>
+                    {formData.template.communication_preferences.sms.enabled ? (
+                      <CheckCircleIcon className="h-6 w-6 text-green-500 inline" title='Enabled' />
+                    ) : (
+                      <XCircleIcon className="h-6 w-6 text-red-500 inline" title='Disabled' />
+                    )}
+                  </div>
+                  <button title={formData.template.communication_preferences.sms.type === 'opt-in' ? 'Opt In' : 'Opt Out'} className="bg-gray-100 border-gray-300 hover:bg-gray-200 border px-2 rounded h-6 shrink-0 text-sm font-semibold min-w-[4.5rem]" onClick={() => handleCommunicationPreferenceChange('sms', 'type', formData.template.communication_preferences.sms.type === 'opt-in' ? 'opt-out' : 'opt-in')}>
+                    {formData.template.communication_preferences.sms.type === 'opt-in' ? 
+                        "Opt In"
+                        :
+                        "Opt Out"
+                    }
+                  </button>
+                  <div className="h-5 w-5 shrink-0 rounded border border-gray-500 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                  </div>
+                  <div 
+                    className="text-sm leading-6 text-gray-900 dark:text-white flex w-full"
+                  >
+                    <InlineEditableText
+                      value={formData.template.communication_preferences.sms.label}
+                      onChange={(value) => handleCommunicationPreferenceChange('sms', 'label', value)}
+                      className="text-sm leading-6 text-gray-900 dark:text-white pt-[0.09rem]"
+                      placeholder="Enter SMS communication label..."
+                      padding={false}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Footer with Disclaimer */}
@@ -1186,24 +1414,24 @@ export default function CreateClaimFreeProductTemplate({
                 />
               </p>
               <div className="mt-4 flex justify-center space-x-6 text-sm text-gray-500 dark:text-gray-400">
-                { formData.template.client_url && 
-                  <a href={formData.template.client_url} className={`hover:text-gray-600 dark:hover:text-gray-300 ${!formData.prerequisites.client_name ? 'font-bold italic' : ''}`}>{formData.prerequisites.client_name || '{{client_name}}'}</a>
+                { formData.prerequisites.client_url && 
+                  <a href={formData.prerequisites.client_url} className={`hover:text-gray-600 dark:hover:text-gray-300 ${!formData.prerequisites.client_name ? 'font-bold italic text-theme-400 hover:text-theme-400' : ''}`}>{formData.prerequisites.client_name || '{{client_name}}'}</a>
                 }
-                { formData.template.privacy_url &&
+                { formData.prerequisites.privacy_url &&
                   <>
                     <span>•</span>
-                    <a href={formData.template.privacy_url} className="hover:text-gray-600 dark:hover:text-gray-300">Privacy Policy</a>
+                    <a href={formData.prerequisites.privacy_url} className="hover:text-gray-600 dark:hover:text-gray-300">Privacy Policy</a>
                   </>
                 }
-                { formData.template.contact_url &&
+                { formData.prerequisites.contact_url &&
                   <>
                     <span>•</span>
-                    <a href={formData.template.contact_url} className="hover:text-gray-600 dark:hover:text-gray-300">Contact Support</a>
+                    <a href={formData.prerequisites.contact_url} className="hover:text-gray-600 dark:hover:text-gray-300">Contact Support</a>
                   </>
                 }
               </div>
               <p className="mt-4 text-xs text-gray-400 dark:text-gray-500">
-                © 2025 Angel Charity Services. All rights reserved.
+                © 2025 Angel Gifts. All rights reserved.
               </p>
             </div>
           </div>

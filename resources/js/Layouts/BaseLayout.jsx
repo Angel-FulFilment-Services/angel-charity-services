@@ -5,12 +5,8 @@ import 'react-toastify/dist/ReactToastify.css';
 
 export default function BaseLayout({ 
   children, 
-  title = 'Angel Charity Services',
+  title = 'Angel Gifts',
   theme, 
-  mode, 
-  handleSetTheme, 
-  handleSetMode,
-  handleSetDarkTheme 
 }) {
   return (
     <>
@@ -19,10 +15,6 @@ export default function BaseLayout({
         {/* Pass theme and mode props to children */}
         {React.cloneElement(children, {
           theme,
-          mode,
-          handleSetTheme,
-          handleSetMode,
-          handleSetDarkTheme
         })}
         
         {/* Toast notifications */}
@@ -36,7 +28,7 @@ export default function BaseLayout({
           pauseOnFocusLoss
           draggable
           pauseOnHover
-          theme={mode === 'dark' ? 'dark' : 'light'}
+          theme='light'
         />
       </div>
     </>

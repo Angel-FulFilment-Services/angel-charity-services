@@ -222,8 +222,7 @@ export default function ProductCapture({
   const templateVariables = {
     product_name: displayProductName,
     client_name: displayClientName,
-    title: displayTitle,
-    surname: displaySurname
+    salutation: displayTitle + ' ' + displaySurname,
   };
 
   // Apply template replacements
@@ -1054,7 +1053,7 @@ export default function ProductCapture({
                 }
               </div>
               <p className="mt-4 text-xs text-gray-400 dark:text-gray-500">
-                © 2025 Angel Charity Services. All rights reserved.
+                © 2025 Angel Gifts. All rights reserved.
               </p>
             </div>
           </div>

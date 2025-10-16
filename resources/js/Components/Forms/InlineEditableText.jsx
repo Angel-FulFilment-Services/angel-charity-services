@@ -5,6 +5,7 @@ export default function InlineEditableText({
   onChange, 
   className = '', 
   placeholder = 'Click to edit...',
+  padding = true,
   disabled = false
 }) {
   const [editValue, setEditValue] = useState(value || '');
@@ -80,7 +81,7 @@ export default function InlineEditableText({
       
       // Measure height with the correct width
       document.body.appendChild(clone);
-      const naturalHeight = Math.max(clone.scrollHeight, 32);
+      const naturalHeight = Math.max(clone.scrollHeight, 26);
       document.body.removeChild(clone);
       
       // Apply both width and height simultaneously to avoid flickering
@@ -96,11 +97,26 @@ export default function InlineEditableText({
     }
   }, [editValue]);
 
-  // Initial resize on mount
+  // Initial resize on mount and add window resize listener
   useEffect(() => {
+    const handleResize = () => {
+      if (textareaRef.current) {
+        autoResize(textareaRef.current);
+      }
+    };
+
+    // Initial resize
     if (textareaRef.current) {
       autoResize(textareaRef.current);
     }
+
+    // Add resize listener
+    window.addEventListener('resize', handleResize);
+
+    // Cleanup listener on unmount
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
   }, []);
 
   const handleChange = (e) => {
@@ -121,8 +137,9 @@ export default function InlineEditableText({
     bg-black bg-opacity-5 dark:bg-white dark:bg-opacity-5
     hover:bg-opacity-10 dark:hover:bg-opacity-10
     focus:bg-opacity-15 dark:focus:bg-opacity-15
-    transition-all duration-200 rounded-lg px-2 py-1
+    transition-all duration-200 rounded-lg px-2
     ${className.replace(/w-full|block/g, '').trim()}
+    ${padding ? 'py-1' : ''}
   `;
 
   return (
