@@ -22,7 +22,8 @@ Route::middleware('auth:api')->get('/user', function (Request $request) {
 // Preload Customer Information
 Route::post('customer/preload-customer-information',[ProductClaimController::class, 'preload_customer_information'])->name('preload_customer_information')
     ->withoutMiddleware('throttle:api')
-    ->middleware('throttle:2000,1');
+    ->middleware('throttle:2000,1')
+    ->middleware('auth:api');
 
 // Revoke Customer Form Access
 Route::post('customer/revoke-customer-form-access',[ProductClaimController::class, 'revoke_customer_form_access'])->name('revoke_customer_form_access')

@@ -13,4 +13,10 @@ export default defineConfig({
     optimizeDeps: {
         include: ['lottie-colorify'],
     },
+    server: {
+        host: '0.0.0.0',
+        hmr: {
+            host: 'localhost',
+        },
+    },
 });

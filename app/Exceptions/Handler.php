@@ -54,8 +54,19 @@ class Handler extends ExceptionHandler
             ? $exception->getStatusCode()
             : 500;
 
-        if (in_array($status, [500, 503, 404, 403])) {
-            return Inertia::render('Errors/ErrorPage', ['status' => $status])
+        if (in_array($status, [500, 503, 404, 403, 401, 410, 400])) {
+            // Prepare error page data
+            $errorData = ['status' => $status];
+            
+            // Check if there's additional data stored in the session for this error
+            if (session()->has('error_page_data')) {
+                $additionalData = session()->pull('error_page_data');
+                if (is_array($additionalData)) {
+                    $errorData = array_merge($errorData, $additionalData);
+                }
+            }
+            
+            return Inertia::render('Errors/ErrorPage', $errorData)
                 ->toResponse($request)
                 ->setStatusCode($status);
         } elseif ($status === 419) {

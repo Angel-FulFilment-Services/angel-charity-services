@@ -23,7 +23,7 @@ class CreateUsersTable extends Migration
             $table->string('active');
             $table->integer('role');
             $table->dateTime('last_logon')->nullable();;
-            $table->string('api_key', 80)->unique()->nullable()->default(null);
+            $table->string('api_token', 80)->unique()->nullable()->default(null);
             $table->rememberToken();
             $table->timestamps();
         });

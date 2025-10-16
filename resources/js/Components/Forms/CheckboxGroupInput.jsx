@@ -37,7 +37,7 @@ export default function CheckboxGroupInput(props) {
       )}
 
       {/* Checkbox Options */}
-      <div className="space-y-2">
+      <div className="space-y-3">
         {items.map((item, index) => (
           <div key={index} className="flex items-center">
             <input
@@ -48,13 +48,13 @@ export default function CheckboxGroupInput(props) {
               checked={selectedItems.includes(item.value)}
               onChange={() => handleCheckboxChange(item.value)}
               disabled={disabled}
-              className={`h-4 w-4 text-theme-600 dark:text-theme-700 border-gray-300 dark:border-dark-600 rounded focus:ring-theme-600 dark:focus:ring-theme-700 accent-theme-600 dark:accent-theme-700 ${
+              className={`h-5 w-5 text-theme-600 dark:text-theme-700 border-gray-300 dark:border-dark-600 rounded focus:ring-theme-600 dark:focus:ring-theme-700 accent-theme-600 dark:accent-theme-700 ${
                 disabled ? "opacity-75 cursor-not-allowed" : ""
               }`}
             />
             <label
               htmlFor={`${id}-${index}`}
-              className={`ml-2 text-sm text-gray-900 dark:text-dark-100 ${
+              className={`ml-3 text-sm text-gray-900 dark:text-dark-100 ${
                 disabled ? "opacity-75 cursor-not-allowed" : ""
               }`}
             >

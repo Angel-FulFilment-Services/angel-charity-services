@@ -151,7 +151,7 @@ export default function ComboInput(props) {
               displayValue={() => query}
               placeholder={placeholder}
               disabled={disabled}
-              maxLength={8}
+              maxLength={2000}
               spellCheck="false" // Disable spellcheck
               autoComplete="postal-code" // Use proper autocomplete attribute for postcodes
               name="postcode-search" // Use descriptive name

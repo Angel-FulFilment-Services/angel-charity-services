@@ -1,26 +1,29 @@
 import { useState, useEffect, useRef } from 'react';
-import PostcodeInput from '../Components/Forms/PostcodeInput';
-import TextInput from '../Components/Forms/TextInput';
-import SelectInput from '../Components/Forms/SelectInput';
-import ScrollHint from '../Components/Hints/ScrollHint';
+import PostcodeInput from '../../Components/Forms/PostcodeInput';
+import TextInput from '../../Components/Forms/TextInput';
+import SelectInput from '../../Components/Forms/SelectInput';
+import CheckboxGroupInput from '../../Components/Forms/CheckboxGroupInput';
+import ScrollHint from '../../Components/Hints/ScrollHint';
 import Lottie from 'lottie-react';
 import { getColors, replaceColor } from 'lottie-colorify';
-import animationLoading from '../../animations/gift.json';
-import animationSuccess from '../../animations/success.json';
-import { generateColorScale, injectThemeColors, replaceAnimationColors } from '../Utils/Color';
+import animationLoading from '../../../animations/gift.json';
+import animationSuccess from '../../../animations/success.json';
+import { generateColorScale, injectThemeColors, replaceAnimationColors } from '../../Utils/Color';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import { 
   validateRequired, 
   validateIsLength, 
   validateIsPostalCode,
   validateIsAlpha 
-} from '../Utils/Validation';
+} from '../../Utils/Validation';
 import { 
   sanitizeTrim, 
   sanitizeEscape,
   sanitizeToUpperCase,
   sanitizeProperCase,
   stripHtmlTags 
-} from '../Utils/Sanitisers';
+} from '../../Utils/Sanitisers';
 import { 
   UserIcon, 
   HomeIcon, 
@@ -34,10 +37,6 @@ import { ring } from 'ldrs';
 
 
 export default function ProductCapture({ 
-  theme, 
-  mode, 
-  handleSetTheme, 
-  handleSetMode,
   guid, // Add guid prop
   title,
   surname,
@@ -54,19 +53,34 @@ export default function ProductCapture({
   client_url,
   contact_url,
   privacy_url,
-  theme_colour // New prop for custom theme color (hex or rgb)
+  privacy_notice,
+  theme_colour, // New prop for custom theme color (hex or rgb)
+  communication_channels = [], // Array of communication channel objects
+  status
 }) {
 
-  const themeColour = theme_colour || '#0D529F'; // Default to blue if not provided
+  const themeColour = theme_colour || '#008DA9'; // Default to blue if not provided
 
-  // Loading state for initial page load
-  const [isLoading, setIsLoading] = useState(true);
+  // Process and format communication channels for CheckboxGroupInput
+  const formattedCommunicationChannels = communication_channels
+    ? communication_channels
+        .filter(channel => channel && channel.channel && channel.label) // Filter out invalid entries
+        .map(channel => ({
+          value: channel.channel,
+          label: channel.label,
+          type: channel.type || 'opt-in' // Default to opt-in if type not specified
+        }))
+    : [];
+
+  // Loading state for initial page load - initialize based on status to prevent flashing
+  const [isLoading, setIsLoading] = useState(status !== 'completed' && status !== 'processing');
+  const [isLoaded, setIsLoaded] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [animationDataLoading, setAnimationDataLoading] = useState(null);
   const [animationDataSuccess, setAnimationDataSuccess] = useState(null);
   
-  // Completion state for form submission
-  const [isCompleted, setIsCompleted] = useState(false);
+  // Completion state for form submission - initialize to true if status is completed or processing
+  const [isCompleted, setIsCompleted] = useState(status === 'completed' || status === 'processing');
   const [isCompletionTransitioning, setIsCompletionTransitioning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -115,16 +129,32 @@ export default function ProductCapture({
 
   // Initialize page loading
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsTransitioning(true);
-      // After transition starts, complete it
-      setTimeout(() => {
-        setIsLoading(false);
-      }, 400); // 400ms transition duration (reduced from 800ms)
-    }, 1600); // 2 second loading time
+    // Check if status is completed or processing and skip directly to completed state
+    if (status === 'completed' || status === 'processing') {
+      // Skip loading entirely and go straight to completed state
+      setIsLoading(false);
+      setIsCompleted(true);
 
-    return () => clearTimeout(timer);
-  }, []);
+      const timer = setTimeout(() => {
+        setIsLoaded(true);
+      }, 200); // 2 second loading time
+
+      return () => clearTimeout(timer);
+
+    } else {
+      setIsLoaded(true);
+      // Normal loading flow for pending status
+      const timer = setTimeout(() => {
+        setIsTransitioning(true);
+        // After transition starts, complete it
+        setTimeout(() => {
+          setIsLoading(false);
+        }, 400); // 400ms transition duration (reduced from 800ms)
+      }, 1600); // 2 second loading time
+
+      return () => clearTimeout(timer);
+    }
+  }, [status]);
 
   // Control body overflow during loading
   useEffect(() => {
@@ -148,20 +178,21 @@ export default function ProductCapture({
   const [productImageError, setProductImageError] = useState(false);
 
   // Default values when props are null
-  const r2bucketURL = 'https://pulse.cdn.angelfs.co.uk/clients/images/';
-  const defaultClientImage = 'bf-logo.png';
-  const defaultProductImage = '/images/Coin.webp';
-  const defaultClientName = 'RAF Benevolent Fund';
+  const r2bucketURL = 'https://cdn.angelfs.co.uk/clients/images/';
+  const defaultClientImage = 'afs-logo.png';
+  const defaultProductImage = '';
+  const defaultClientName = 'Angel Charity Services';
   const defaultProductName = 'Pin Badge';
   const defaultProductTitle = 'Claim Your Free {{product_name}}';
   const defaultProductMessage = 'Complete this form to claim your free {{product_name}}. We\'ll use your details to arrange delivery and keep you updated.';
-  const defaultClientUrl = 'https://www.rafbf.org';
-  const defaultContactURL = 'https://www.rafbf.org/contact-us';
-  const defaultPrivacyURL = 'https://www.rafbf.org/privacy';
+  const defaultClientUrl = 'https://www.helloangel.co.uk/';
+  const defaultContactURL = 'https://www.helloangel.co.uk/contact-us';
+  const defaultPrivacyURL = 'https://www.helloangel.co.uk/privacypolicy';
   const defaultLoadingTitle = 'Preparing Your Free {{product_name}}';
   const defaultLoadingMessage = 'Setting up your personalized claim form...';
   const defaultCompletedTitle = 'Thank You!';
   const defaultCompletedMessage = 'Your free {{product_name}} claim has been submitted successfully. We\'ll process your request and arrange delivery soon.';
+  const defaultPrivacyNotice = 'By claiming your free product, you agree to our terms of service and privacy policy. Your information will be used solely for product delivery and customer support. We will never sell or share your personal information with third parties without your consent.';  
 
   // Template replacement function
   const replaceTemplateVariables = (template, variables) => {
@@ -176,8 +207,11 @@ export default function ProductCapture({
   // Use provided values or fall back to defaults
   const displayTitle = title;
   const displaySurname = surname;
-  const displayImage = r2bucketURL + (client_image || defaultClientImage);
-  const productImage = product_image || defaultProductImage;
+  const displayImage = r2bucketURL + 'logos/' + (client_image || defaultClientImage);
+  const productImage = r2bucketURL + 'products/' + (product_image || defaultProductImage);
+
+  console.log('Product Image URL:', productImage);
+
   const displayClientName = client_name || defaultClientName;
   const displayProductName = product_name || defaultProductName;
   const clientUrl = client_url || defaultClientUrl;
@@ -199,6 +233,7 @@ export default function ProductCapture({
   const displayCompletedMessage = replaceTemplateVariables(completed_message || defaultCompletedMessage, templateVariables);
   const displayFormTitle = replaceTemplateVariables(product_title || defaultProductTitle, templateVariables);
   const displayFormMessage = replaceTemplateVariables(product_message || defaultProductMessage, templateVariables);
+  const displayPrivacyNotice = replaceTemplateVariables(privacy_notice || defaultPrivacyNotice, { product_name: displayProductName, client_name: displayClientName });
 
   // Handle product image loading
   const handleProductImageLoad = () => {
@@ -238,7 +273,8 @@ export default function ProductCapture({
       county: '',
       postcode: '',
       country: 'United Kingdom'
-    }
+    },
+    communicationPreferences: [] // Array to store selected communication channels
   });
 
   // Form validation errors
@@ -246,6 +282,9 @@ export default function ProductCapture({
 
   // Separate state for postcode search (unbinded from form postcode field)
   const [postcodeSearch, setPostcodeSearch] = useState('');
+  
+  // State to control postcode search functionality
+  const [postcodeSearchActive, setPostcodeSearchActive] = useState(false);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -283,6 +322,20 @@ export default function ProductCapture({
     
     if (hasChanges) {
       setErrors(clearedErrors);
+    }
+  };
+
+  const handleCommunicationPreferencesChange = (selectedChannels) => {
+    setFormData(prev => ({
+      ...prev,
+      communicationPreferences: selectedChannels
+    }));
+    // Clear communication preferences error if it exists
+    if (errors.communicationPreferences) {
+      setErrors(prev => ({
+        ...prev,
+        communicationPreferences: null
+      }));
     }
   };
 
@@ -391,7 +444,8 @@ export default function ProductCapture({
         county: sanitizeProperCase(sanitizeTrim(sanitizeEscape(data.address.county))),
         postcode: sanitizeToUpperCase(sanitizeTrim(data.address.postcode)),
         country: sanitizeTrim(sanitizeEscape(data.address.country))
-      }
+      },
+      communicationPreferences: data.communicationPreferences || []
     };
   };
 
@@ -424,7 +478,8 @@ export default function ProductCapture({
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    if (isSubmitting || isCompleted) return; // Prevent double submission
+    // Prevent submission if already submitting, completed, or status indicates form is no longer available
+    if (isSubmitting || isCompleted || ['completed', 'expired', 'processing'].includes(status)) return;
     
     // Validate form before submission
     const isValid = validateForm();
@@ -518,7 +573,14 @@ export default function ProductCapture({
           // Handle cases where there's no specific field errors but submission failed
           console.error('Server error:', data);
           // You could add a general error to a specific field or handle differently
-          alert(data.message || 'An unexpected error occurred. Please try again.');
+          toast.error(data.message || 'An unexpected error occurred. Please try again.', {
+            position: "top-center",
+            autoClose: 5000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+          });
         }
       }
     })
@@ -526,8 +588,15 @@ export default function ProductCapture({
       setIsSubmitting(false);
       console.error('Network error:', error);
       
-      // Show network error as alert since it's not field-specific
-      alert('A network error occurred. Please check your connection and try again.');
+      // Show network error as toast since it's not field-specific
+      toast.error('A network error occurred. Please check your connection and try again.', {
+        position: "top-center",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
     });
   };
 
@@ -587,7 +656,7 @@ export default function ProductCapture({
                style={{ animationDelay: isCompleted ? '0.1s' : '0s' }}>
             <div className="h-96 w-96 mx-auto flex items-center justify-center">
               {/* Success Checkmark or Animation */}
-              {animationDataSuccess && (
+              {animationDataSuccess && isLoaded && (
                 <Lottie
                   animationData={animationDataSuccess}
                   loop={!isCompleted}
@@ -772,23 +841,25 @@ export default function ProductCapture({
 
                   <div className="mt-8 grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-6">
                     {/* Postcode Lookup */}
-                    <div className="col-span-full">
-                      <PostcodeInput
-                        id={{
-                          postcode: 'postcode-search',
-                          address1: 'address1', 
-                          address2: 'address2',
-                          address3: 'address3',
-                          city: 'city',
-                          county: 'county'
-                        }}
-                        label="Search by Postcode"
-                        placeholder="Enter your postcode"
-                        disabled={isSubmitting}
-                        onComboChange={handlePostcodeSearch}
-                        currentState={postcodeSearch}
-                      />
-                    </div>
+                    {postcodeSearchActive && (
+                      <div className="col-span-full">
+                        <PostcodeInput
+                          id={{
+                            postcode: 'postcode-search',
+                            address1: 'address1', 
+                            address2: 'address2',
+                            address3: 'address3',
+                            city: 'city',
+                            county: 'county'
+                          }}
+                          label="Search by Postcode"
+                          placeholder="Enter your postcode"
+                          disabled={isSubmitting}
+                          onComboChange={handlePostcodeSearch}
+                          currentState={postcodeSearch}
+                        />
+                      </div>
+                    )}
 
                     {/* Manual Address Fields */}
                     <div className="col-span-full">
@@ -889,9 +960,9 @@ export default function ProductCapture({
             <button
               type="submit"
               onClick={handleSubmit}
-              disabled={isSubmitting || isCompleted}
+              disabled={isSubmitting || isCompleted || ['completed', 'expired', 'processing'].includes(status)}
               className={`w-full flex justify-center items-center rounded-md px-3 py-4 text-sm font-semibold text-white shadow-sm transition-all duration-200 ${
-                isSubmitting || isCompleted
+                isSubmitting || isCompleted || ['completed', 'expired', 'processing'].includes(status)
                   ? 'bg-theme-400 cursor-not-allowed'
                   : 'bg-theme-600 hover:bg-theme-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-theme-600'
               }`}
@@ -906,16 +977,45 @@ export default function ProductCapture({
                   </l-ring>
                   <span className="ml-2">Processing...</span>
                 </>
-              ) : isCompleted ? (
+              ) : isCompleted || status === 'completed' ? (
                 <>
                   <CheckCircleIcon className="h-5 w-5 text-white mr-2" />
                   Submitted Successfully
                 </>
+              ) : status === 'processing' ? (
+                <>
+                  <CheckCircleIcon className="h-5 w-5 text-white mr-2" />
+                  Already Processing
+                </>
+              ) : status === 'expired' ? (
+                'Form Expired'
               ) : (
                 'Claim My Free Product'
               )}
             </button>
           </div>
+
+          {/* Communication Preferences Section */}
+          {formattedCommunicationChannels && formattedCommunicationChannels.length > 0 && (
+            <div className="mt-8">
+              <h2 className="text-base font-semibold leading-7 text-gray-900 dark:text-white">Communication Preferences</h2>
+              <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
+                Please let us know how you would like to hear from us.
+              </p>
+
+              <div className="mt-4">
+                <CheckboxGroupInput
+                  id="communication-preferences"
+                  items={formattedCommunicationChannels}
+                  selectedItems={formData.communicationPreferences}
+                  onChange={handleCommunicationPreferencesChange}
+                  disabled={isSubmitting}
+                  error={errors.communicationPreferences}
+                  clearErrors={clearErrors}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer with Disclaimer */}
@@ -936,9 +1036,7 @@ export default function ProductCapture({
                 />
               </div>
               <p className="text-sm leading-6 text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-                By claiming your free product, you agree to our terms of service and privacy policy. 
-                Your information will be used solely for product delivery and customer support. 
-                We will never sell or share your personal information with third parties without your consent.
+                {displayPrivacyNotice}
               </p>
               <div className="mt-4 flex justify-center space-x-6 text-sm text-gray-500 dark:text-gray-400">
                 { clientUrl && <a href={clientUrl} className="hover:text-gray-600 dark:hover:text-gray-300">{displayClientName}</a>}
@@ -977,6 +1075,20 @@ export default function ProductCapture({
             </ScrollHint>
           </div>
         )}
+        
+        {/* Toast Container */}
+        <ToastContainer
+          position="top-right"
+          autoClose={5000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme="light"
+        />
     </div>
   );
 }

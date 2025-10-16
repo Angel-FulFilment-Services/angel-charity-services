@@ -33,6 +33,8 @@ class Customer extends Model
         'contact_url',
         'privacy_url',
         'theme_colour',
+        'communication_channels',
+        'privacy_notice',
         'title',
         'first_name',
         'surname',
@@ -43,6 +45,7 @@ class Customer extends Model
         'county',
         'postcode',
         'country',
+        'communication_preferences',
         'status',
         'submitted_at',
         'processed_at',
@@ -55,6 +58,9 @@ class Customer extends Model
         'processed_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        
+        // JSON fields
+        'communication_channels' => 'array',
     ];
 
     /**
@@ -82,6 +88,9 @@ class Customer extends Model
             foreach ($encryptedFields as $field) {
                 $casts[$field] = EncryptedWithCustomKey::class;
             }
+        } else {
+            // In non-production, cast communication_preferences as array
+            $casts['communication_preferences'] = 'array';
         }
         
         return $casts;

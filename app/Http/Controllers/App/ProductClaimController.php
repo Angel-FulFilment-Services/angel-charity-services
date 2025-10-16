@@ -9,9 +9,23 @@ use App\Models\App\Customer;
 use Illuminate\Support\Facades\URL;
 use AshAllenDesign\ShortURL\Facades\ShortURL;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class ProductClaimController extends Controller
 {
+    /**
+     * Abort with additional data for error pages
+     */
+    private function abortWithData($status, $message, $data = [])
+    {
+        // Store the data in session so the error handler can access it
+        if (!empty($data)) {
+            session()->flash('error_page_data', $data);
+        }
+        
+        abort($status, $message);
+    }
+
     /**
      * Display the product claim form
      */
@@ -23,13 +37,6 @@ class ProductClaimController extends Controller
                 abort(400, 'Invalid GUID format');
             }
 
-            // Check if request has valid signature (temporary signed URL)
-            if (!$request->hasValidSignature()) {
-                Log::warning('Invalid signature for product claim', ['guid' => $guid]);
-                // TODO: return redirect()->route('claim_expired', $guid);
-                abort(403, 'Invalid or expired link');
-            }
-
             // Find customer by GUID
             $customer = Customer::where('guid', $guid)->first();
 
@@ -39,13 +46,34 @@ class ProductClaimController extends Controller
                 abort(404, 'Claim not found');
             }
 
-            // Check if customer record is expired or completed
-            if ($customer->status === 'expired') {
-                Log::info('Attempted access to expired claim', ['guid' => $guid]);
+            // Check if request has valid signature (temporary signed URL)
+            if (!$request->hasValidSignature()) {
+                // If we have customer data, pass it to the error page
+                $errorData = $customer ? [
+                    'guid' => $customer->guid,    
+                    'title' => $customer->title,
+                    'surname' => $customer->surname,
+                    'client_image' => $customer->client_image,
+                    'client_name' => $customer->client_name,
+                    'expired_title' => $customer->expired_title,
+                    'expired_message' => $customer->expired_message,
+                    'client_url' => $customer->client_url,
+                    'contact_url' => $customer->contact_url,
+                    'theme_colour' => $customer->theme_colour,
+                ] : [];
                 
+                Log::info('Expired or invalid signature for claim link', ['guid' => $guid]);
+
+                $this->abortWithData(410, 'Invalid or expired link', $errorData);
+            }
+
+            // Check if customer record is expired or completed
+            if ($customer->status === 'expired' || $customer->status === 'completed') {
                 // Load expired page data
                 $expiredData = [
                     'guid' => $customer->guid,
+                    'title' => $customer->title,
+                    'surname' => $customer->surname,
                     'client_image' => $customer->client_image,
                     'client_name' => $customer->client_name,
                     'expired_title' => $customer->expired_title,
@@ -55,9 +83,29 @@ class ProductClaimController extends Controller
                     'theme_colour' => $customer->theme_colour,
                     'status' => 'expired'
                 ];
-                
-                // TODO: return Inertia::render('ProductExpired', $expiredData);
-                abort(410, 'This claim link has expired');
+
+                Log::info('Claim link expired', ['guid' => $guid]);
+
+                $this->abortWithData(410, 'This claim link has expired', $expiredData);
+            }
+
+            if ($customer->status === 'processing') {
+                // Load processing page data
+                $processingData = [
+                    'guid' => $customer->guid,
+                    'title' => $customer->title,
+                    'surname' => $customer->surname,
+                    'client_image' => $customer->client_image,
+                    'client_name' => $customer->client_name,
+                    'completed_title' => $customer->completed_title,
+                    'completed_message' => $customer->completed_message,
+                    'client_url' => $customer->client_url,
+                    'contact_url' => $customer->contact_url,
+                    'theme_colour' => $customer->theme_colour,
+                    'status' => 'processing'
+                ];
+
+                return Inertia::render('Forms/ClaimFreeProduct', $processingData);
             }
 
             // Prepare claim data for the form
@@ -81,18 +129,12 @@ class ProductClaimController extends Controller
                 'contact_url' => $customer->contact_url,
                 'privacy_url' => $customer->privacy_url,
                 'theme_colour' => $customer->theme_colour,
+                'communication_channels' => $customer->communication_channels,
+                'privacy_notice' => $customer->privacy_notice,
                 'status' => $customer->status
             ];
 
-            // Log successful access
-            Log::info('Product claim form accessed', [
-                'guid' => $guid,
-                'customer_id' => $customer->id,
-                'client_ref' => $customer->client_ref,
-                'status' => $customer->status
-            ]);
-
-            return Inertia::render('ProductCapture', $claimData);
+            return Inertia::render('Forms/ClaimFreeProduct', $claimData);
 
         } catch (\Exception $e) {
             // Log the error
@@ -107,7 +149,7 @@ class ProductClaimController extends Controller
                 throw $e; // Re-throw HTTP exceptions (400, 403, 404, etc.)
             }
 
-            abort(500, 'An error occurred while loading the claim form');
+            abort(500, 'An error occurred while loading the claim form, please try again later.');
         }
     }
 
@@ -130,6 +172,8 @@ class ProductClaimController extends Controller
                 'address.county' => 'required|string|max:50',
                 'address.postcode' => 'required|string|max:10',
                 'address.country' => 'required|string|max:50',
+                'communicationPreferences' => 'nullable|array',
+                'communicationPreferences.*' => 'string|max:50',
             ]);
 
             // Find the customer record by GUID
@@ -167,8 +211,12 @@ class ProductClaimController extends Controller
                 'county' => $validated['address']['county'],
                 'postcode' => $validated['address']['postcode'],
                 'country' => $validated['address']['country'],
+                
+                // Communication preferences
+                'communication_preferences' => $validated['communicationPreferences'] ?? [],
+                
                 'submitted_at' => now(),
-                'status' => 'submitted'
+                'status' => 'processing'
             ]);
 
             return response()->json([
@@ -232,6 +280,11 @@ class ProductClaimController extends Controller
                 'completed_message' => 'nullable|string|max:1000',
                 'expired_title' => 'nullable|string|max:500',
                 'expired_message' => 'nullable|string|max:1000',
+                'communication_channels' => 'nullable|array',
+                'communication_channels.*.channel' => 'required_with:communication_channels|string|max:50',
+                'communication_channels.*.label' => 'required_with:communication_channels|string|max:255',
+                'communication_channels.*.type' => 'nullable|string|in:opt-in,opt-out',
+                'privacy_notice' => 'nullable|string|max:2000',
             ]);
 
             // Check if customer already exists
@@ -260,6 +313,10 @@ class ProductClaimController extends Controller
                 'privacy_url' => $validated['privacy_url'],
                 'ngn' => $validated['ngn'],
                 'theme_colour' => $validated['theme_colour'],
+
+                // Communication preferences configuration
+                'communication_channels' => $validated['communication_channels'] ?? null,
+                'privacy_notice' => $validated['privacy_notice'] ?? null,
 
                 // Product information
                 'product_title' => $validated['product_title'],
@@ -488,5 +545,69 @@ class ProductClaimController extends Controller
                 'error_code' => 'INTERNAL_ERROR'
             ], 500); // 500 Internal Server Error
         }
+    }
+
+    /**
+     * Display the template creation page for claim free product forms
+     */
+    public function createTemplate()
+    {
+
+        $clients = DB::connection('halo_config')->table('client_tables')
+        ->select('unq_id as id', 'clientref as client_ref', 'clientname as client_name')
+        ->where(function ($query) {
+            $query->whereNull('active')
+                  ->orWhere('active','=', '');
+        })
+        ->get()
+        ->map(function ($client) {
+            return [
+                'id' => $client->id,
+                'value' => $client->client_name,
+                'client_ref' => $client->client_ref
+            ];
+        });
+
+        // Sample template data - this will eventually come from database
+        $templateData = [
+            'template_name' => 'Sample Template',
+            'title' => 'Mr',
+            'surname' => 'Smith',
+            'client_image' => 'afs-logo.png',
+            'client_name' => 'Angel Charity Services',
+            'loading_title' => 'Preparing Your Free {{product_name}}',
+            'loading_message' => 'Setting up your personalized claim form...',
+            'completed_title' => 'Thank You!',
+            'completed_message' => 'Your free {{product_name}} claim has been submitted successfully. We\'ll process your request and arrange delivery soon.',
+            'product_title' => 'Claim Your Free {{product_name}}',
+            'product_message' => 'Complete this form to claim your free {{product_name}}. We\'ll use your details to arrange delivery and keep you updated.',
+            'product_name' => 'Pin Badge',
+            'product_image' => '',
+            'client_url' => 'https://www.helloangel.co.uk/',
+            'contact_url' => 'https://www.helloangel.co.uk/contact-us',
+            'privacy_url' => 'https://www.helloangel.co.uk/privacypolicy',
+            'privacy_notice' => 'By claiming your free product, you agree to our terms of service and privacy policy. Your information will be used solely for product delivery and customer support. We will never sell or share your personal information with third parties without your consent.',
+            'theme_colour' => '#008DA9',
+            'clients' => $clients,
+            'communication_channels' => [
+                [
+                    'channel' => 'email',
+                    'label' => 'Email updates',
+                    'type' => 'opt-in'
+                ],
+                [
+                    'channel' => 'sms',
+                    'label' => 'SMS notifications', 
+                    'type' => 'opt-out'
+                ],
+                [
+                    'channel' => 'post',
+                    'label' => 'Postal mail',
+                    'type' => 'opt-in'
+                ]
+            ]
+        ];
+
+        return Inertia::render('Forms/CreateClaimFreeProductTemplate', $templateData);
     }
 }

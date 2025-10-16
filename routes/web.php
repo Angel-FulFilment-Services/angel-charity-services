@@ -23,3 +23,6 @@ Route::post('/product-claim', [ProductClaimController::class, 'store'])->name('p
 Route::post('/claim-free-product/expired/guid={guid}', [ProductClaimController::class, 'expired'])->name('product.claim.expired');
 
 Route::post('/claim-free-product/process/guid={guid}', [ProductClaimController::class, 'store'])->name('product.claim.store');
+
+// Template management routes
+Route::get('/templates/claim-free-product/create', [ProductClaimController::class, 'createTemplate'])->name('product.claim.template.create');
