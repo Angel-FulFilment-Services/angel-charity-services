@@ -40,6 +40,7 @@ export default function ProductCapture({
   guid, // Add guid prop
   title,
   surname,
+  ngn,
   client_image,
   client_name,
   loading_title,
@@ -210,19 +211,19 @@ export default function ProductCapture({
   const displayImage = r2bucketURL + 'logos/' + (client_image || defaultClientImage);
   const productImage = r2bucketURL + 'products/' + (product_image || defaultProductImage);
 
-  console.log('Product Image URL:', productImage);
-
   const displayClientName = client_name || defaultClientName;
   const displayProductName = product_name || defaultProductName;
   const clientUrl = client_url || defaultClientUrl;
   const contactUrl = contact_url || defaultContactURL;
   const privacyUrl = privacy_url || defaultPrivacyURL;
+  const displayNGN = ngn || '';
 
   // Template variables for replacements
   const templateVariables = {
     product_name: displayProductName,
     client_name: displayClientName,
     salutation: displayTitle + ' ' + displaySurname,
+    ngn: displayNGN
   };
 
   // Apply template replacements

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { HexColorPicker } from 'react-colorful';
+import TextInput from './TextInput';
 
 export default function ColorInput({ 
   id, 
@@ -20,6 +21,8 @@ export default function ColorInput({
   const buttonRef = useRef(null);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const [portalMounted, setPortalMounted] = useState(false);
+  const [hexInput, setHexInput] = useState(currentState);
+  const [hexError, setHexError] = useState('');
 
   useEffect(() => {
     if (isOpen && buttonRef.current) {
@@ -35,7 +38,7 @@ export default function ColorInput({
     }
   }, [isOpen]);
 
-  // Add escape key listener only - no other event handling
+  // Add escape key and click outside listeners
   useEffect(() => {
     if (isOpen) {
       const handleEscape = (event) => {
@@ -44,13 +47,107 @@ export default function ColorInput({
         }
       };
 
+      const handleClickOutside = (event) => {
+        // Don't close if clicking on the button itself
+        if (buttonRef.current && buttonRef.current.contains(event.target)) {
+          return;
+        }
+        
+        // Don't close if clicking inside the dropdown
+        const dropdown = document.querySelector('[data-color-picker-dropdown]');
+        if (dropdown && dropdown.contains(event.target)) {
+          return;
+        }
+        
+        // Close the dropdown
+        setIsOpen(false);
+      };
+
       document.addEventListener('keydown', handleEscape);
-      return () => document.removeEventListener('keydown', handleEscape);
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('keydown', handleEscape);
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
     }
   }, [isOpen]);
 
+  // Sync hex input with current color state
+  useEffect(() => {
+    setHexInput(currentState);
+  }, [currentState]);
+
+  const validateHexColor = (hex) => {
+    if (!hex || hex.trim() === '') return null;
+    
+    // Remove # prefix if present and any whitespace, then uppercase
+    const cleanHex = hex.replace(/^#/, '').trim().toUpperCase();
+    
+    // Check if it's a valid 3 or 6 digit hex color
+    const isValid3Digit = /^[0-9A-F]{3}$/.test(cleanHex);
+    const isValid6Digit = /^[0-9A-F]{6}$/.test(cleanHex);
+    
+    if (isValid3Digit) {
+      // Convert 3-digit to 6-digit hex (e.g., "F0A" -> "FF00AA")
+      const expanded = cleanHex.split('').map(char => char + char).join('');
+      return `#${expanded}`;
+    } else if (isValid6Digit) {
+      return `#${cleanHex}`;
+    }
+    
+    return null;
+  };
+
   const handleColorChange = (color) => {
-    onColorChange(color);
+    const upperColor = color.toUpperCase();
+    onColorChange(upperColor);
+    setHexInput(upperColor);
+  };
+
+  const handleHexInputChange = (value) => {
+    const upperValue = value.toUpperCase();
+    setHexInput(upperValue);
+    setHexError(''); // Clear error when user types
+    
+    // Try to validate and apply color immediately if it's valid
+    const validatedHex = validateHexColor(upperValue);
+    if (validatedHex && validatedHex !== currentState) {
+      onColorChange(validatedHex);
+    }
+  };
+
+  const handleHexInputBlur = () => {
+    const validatedHex = validateHexColor(hexInput);
+    
+    if (validatedHex) {
+      // Valid hex color - update the color and normalize the input
+      onColorChange(validatedHex);
+      setHexInput(validatedHex);
+      setHexError('');
+    } else if (hexInput.trim() === '') {
+      // Empty input - reset to current color
+      setHexInput(currentState);
+      setHexError('');
+    } else {
+      // Invalid hex color - show error but keep the input value
+      setHexError('Invalid hex color code');
+    }
+  };
+
+  const handleHexInputPaste = (event) => {
+    // Let the default paste happen, then process the result
+    setTimeout(() => {
+      const pastedValue = event.target.value.toUpperCase();
+      setHexInput(pastedValue);
+      setHexError('');
+      
+      // Validate and apply the pasted color
+      const validatedHex = validateHexColor(pastedValue);
+      if (validatedHex) {
+        onColorChange(validatedHex);
+        setHexInput(validatedHex);
+      }
+    }, 0);
   };
 
   const togglePicker = () => {
@@ -114,22 +211,16 @@ export default function ColorInput({
             
             {/* Hex Input */}
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Hex Code
-              </label>
-              <input
-                type="text"
-                value={currentState}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  // Only update if it's a valid hex color
-                  if (/^#[0-9A-Fa-f]{6}$/.test(value) || value === '#') {
-                    handleColorChange(value);
-                  }
-                }}
-                className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono"
+              <TextInput
+                id={`${id}-hex`}
+                label="Hex Code"
                 placeholder="#000000"
-                maxLength={7}
+                currentState={hexInput}
+                onTextChange={handleHexInputChange}
+                onBlur={handleHexInputBlur}
+                onPaste={handleHexInputPaste}
+                error={hexError}
+                disabled={disabled}
               />
             </div>
           </div>
@@ -205,7 +296,7 @@ export default function ColorInput({
         onClick={togglePicker}
         disabled={disabled}
         className={`
-          relative w-min min-w-max flex items-center justify-between rounded-md border-0 py-2 px-3 text-gray-900 dark:text-white 
+          relative w-full flex items-center justify-between rounded-md border-0 py-2 px-3 text-gray-900 dark:text-white 
           shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-600 
           placeholder:text-gray-400 dark:placeholder:text-gray-500
           focus:ring-2 focus:ring-inset focus:ring-theme-600 dark:focus:ring-theme-500
@@ -213,12 +304,12 @@ export default function ColorInput({
           transition-colors duration-200
           ${disabled 
             ? 'opacity-50 cursor-not-allowed bg-gray-50 dark:bg-gray-900' 
-            : 'hover:ring-gray-400 dark:hover:ring-gray-500 cursor-pointer'
+            : 'hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer'
           }
         `}
       >
-        {/* Color Preview */}
-        <div className="flex items-center space-x-3 mr-3">
+        {/* Color Preview and Hex Code */}
+        <div className="flex items-center space-x-3 pr-2">
           <div 
             className="w-6 h-6 rounded border border-gray-300 dark:border-gray-500 shadow-sm"
             style={{ backgroundColor: currentState }}

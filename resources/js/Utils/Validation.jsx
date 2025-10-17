@@ -939,3 +939,55 @@ export const validateMatches = (value, pattern, modifiers, options = {}) => {
     }
     return '';
 };
+
+/**
+ * Validates if the value is a valid URL.
+ * @param {string} value - The value to validate.
+ * @param {object} options - Additional options for validation.
+ * @returns {object|string} - Error object or empty string if valid.
+ */
+export const validateIsURL = (value, options = {}) => {
+    const { customMessage, customValidator, errorCode, condition, logErrors, validatorOptions } = { ...defaultOptions, ...options };
+    if (condition && !condition(value)) {
+        return '';
+    }
+    if (customValidator) {
+        const customError = customValidator(value);
+        if (customError) {
+            if (logErrors) logError('isURL', customError);
+            return customError;
+        }
+    }
+    if (!validator.isURL(value, validatorOptions)) {
+        const error = { message: customMessage || 'Please enter a valid URL', code: errorCode || 'INVALID_URL' };
+        if (logErrors) logError('isURL', error);
+        return error;
+    }
+    return '';
+};
+
+/**
+ * Validates if the value is a valid hex color.
+ * @param {string} value - The value to validate.
+ * @param {object} options - Additional options for validation.
+ * @returns {object|string} - Error object or empty string if valid.
+ */
+export const validateIsHexColor = (value, options = {}) => {
+    const { customMessage, customValidator, errorCode, condition, logErrors } = { ...defaultOptions, ...options };
+    if (condition && !condition(value)) {
+        return '';
+    }
+    if (customValidator) {
+        const customError = customValidator(value);
+        if (customError) {
+            if (logErrors) logError('isHexColor', customError);
+            return customError;
+        }
+    }
+    if (!validator.isHexColor(value)) {
+        const error = { message: customMessage || 'Please enter a valid hex color (e.g., #FF0000)', code: errorCode || 'INVALID_HEX_COLOR' };
+        if (logErrors) logError('isHexColor', error);
+        return error;
+    }
+    return '';
+};

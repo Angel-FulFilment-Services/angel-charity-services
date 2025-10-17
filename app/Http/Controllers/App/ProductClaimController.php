@@ -6,10 +6,12 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Http\Controllers\Controller;
 use App\Models\App\Customer;
+use App\Models\App\Template;
 use Illuminate\Support\Facades\URL;
 use AshAllenDesign\ShortURL\Facades\ShortURL;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class ProductClaimController extends Controller
 {
@@ -37,8 +39,8 @@ class ProductClaimController extends Controller
                 abort(400, 'Invalid GUID format');
             }
 
-            // Find customer by GUID
-            $customer = Customer::where('guid', $guid)->first();
+            // Find customer by GUID and load template relationship
+            $customer = Customer::with('template')->where('guid', $guid)->first();
 
             if (!$customer) {
                 Log::warning('Customer not found for GUID', ['guid' => $guid]);
@@ -48,19 +50,12 @@ class ProductClaimController extends Controller
 
             // Check if request has valid signature (temporary signed URL)
             if (!$request->hasValidSignature()) {
-                // If we have customer data, pass it to the error page
-                $errorData = $customer ? [
+                // If we have customer data, pass it to the error page using template configuration
+                $errorData = $customer ? array_merge([
                     'guid' => $customer->guid,    
                     'title' => $customer->title,
                     'surname' => $customer->surname,
-                    'client_image' => $customer->client_image,
-                    'client_name' => $customer->client_name,
-                    'expired_title' => $customer->expired_title,
-                    'expired_message' => $customer->expired_message,
-                    'client_url' => $customer->client_url,
-                    'contact_url' => $customer->contact_url,
-                    'theme_colour' => $customer->theme_colour,
-                ] : [];
+                ], $customer->getTemplateConfig()) : [];
                 
                 Log::info('Expired or invalid signature for claim link', ['guid' => $guid]);
 
@@ -69,20 +64,13 @@ class ProductClaimController extends Controller
 
             // Check if customer record is expired or completed
             if ($customer->status === 'expired' || $customer->status === 'completed') {
-                // Load expired page data
-                $expiredData = [
+                // Load expired page data using template configuration
+                $expiredData = array_merge([
                     'guid' => $customer->guid,
                     'title' => $customer->title,
                     'surname' => $customer->surname,
-                    'client_image' => $customer->client_image,
-                    'client_name' => $customer->client_name,
-                    'expired_title' => $customer->expired_title,
-                    'expired_message' => $customer->expired_message,
-                    'client_url' => $customer->client_url,
-                    'contact_url' => $customer->contact_url,
-                    'theme_colour' => $customer->theme_colour,
                     'status' => 'expired'
-                ];
+                ], $customer->getTemplateConfig());
 
                 Log::info('Claim link expired', ['guid' => $guid]);
 
@@ -90,49 +78,27 @@ class ProductClaimController extends Controller
             }
 
             if ($customer->status === 'processing') {
-                // Load processing page data
-                $processingData = [
+                // Load processing page data using template configuration
+                $processingData = array_merge([
                     'guid' => $customer->guid,
                     'title' => $customer->title,
                     'surname' => $customer->surname,
-                    'client_image' => $customer->client_image,
-                    'client_name' => $customer->client_name,
-                    'completed_title' => $customer->completed_title,
-                    'completed_message' => $customer->completed_message,
-                    'client_url' => $customer->client_url,
-                    'contact_url' => $customer->contact_url,
-                    'theme_colour' => $customer->theme_colour,
                     'status' => 'processing'
-                ];
+                ], $customer->getTemplateConfig());
 
                 return Inertia::render('Forms/ClaimFreeProduct', $processingData);
             }
 
-            // Prepare claim data for the form
-            $claimData = [
+            // Prepare claim data for the form using template configuration
+            $claimData = array_merge([
                 'guid' => $customer->guid,
                 'title' => $customer->title,
                 'surname' => $customer->surname,
-                'client_image' => $customer->client_image,
-                'client_name' => $customer->client_name,
-                'loading_title' => $customer->loading_title,
-                'loading_message' => $customer->loading_message,
-                'completed_title' => $customer->completed_title,
-                'completed_message' => $customer->completed_message,
-                'expired_title' => $customer->expired_title,
-                'expired_message' => $customer->expired_message,
-                'product_title' => $customer->product_title,
-                'product_message' => $customer->product_message,
-                'product_name' => $customer->product_name,
-                'product_image' => $customer->product_image,
-                'client_url' => $customer->client_url,
-                'contact_url' => $customer->contact_url,
-                'privacy_url' => $customer->privacy_url,
-                'theme_colour' => $customer->theme_colour,
                 'communication_channels' => $customer->communication_channels,
                 'privacy_notice' => $customer->privacy_notice,
-                'status' => $customer->status
-            ];
+                'status' => $customer->status,
+                'ngn' => $customer->ngn
+            ], $customer->getTemplateConfig());
 
             return Inertia::render('Forms/ClaimFreeProduct', $claimData);
 
@@ -262,13 +228,15 @@ class ProductClaimController extends Controller
                 'GUID' => 'required|string|uuid',
                 'title' => 'required|string|max:10',
                 'surname' => 'required|string|max:100',
-                'client_ref' => 'required|string|max:100',
-                'client_name' => 'required|string|max:255',
+                'ngn' => 'nullable|string|max:100',
+                'template_id' => 'nullable|integer|exists:product_claim_templates,id',
+                // Template override fields (optional - will use template defaults if not provided)
+                'client_ref' => 'nullable|string|max:100',
+                'client_name' => 'nullable|string|max:255',
                 'client_image' => 'nullable|string|max:500',
                 'client_url' => 'nullable|url|max:500',
                 'contact_url' => 'nullable|url|max:500',
                 'privacy_url' => 'nullable|url|max:500',
-                'ngn' => 'nullable|string|max:100',
                 'theme_colour' => ['nullable', 'string', 'regex:/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/'],
                 'product_title' => 'nullable|string|max:500',
                 'product_message' => 'nullable|string|max:1000',
@@ -296,45 +264,55 @@ class ProductClaimController extends Controller
                 ], 409); // 409 Conflict
             }
 
-            // Create customer record
-            $customer = Customer::create([
+            // Prepare customer data - only include fields that are explicitly provided (for overrides)
+            $customerData = [
                 'guid' => $validated['GUID'],
+                'template_id' => $validated['template_id'] ?? null,
                 
                 // Personal information (conditionally encrypted based on environment)
                 'title' => $validated['title'],
                 'surname' => $validated['surname'],
 
-                // Client information
-                'client_ref' => $validated['client_ref'],
-                'client_name' => $validated['client_name'],
-                'client_image' => $validated['client_image'],
-                'client_url' => $validated['client_url'],
-                'contact_url' => $validated['contact_url'],
-                'privacy_url' => $validated['privacy_url'],
-                'ngn' => $validated['ngn'],
-                'theme_colour' => $validated['theme_colour'],
-
                 // Communication preferences configuration
                 'communication_channels' => $validated['communication_channels'] ?? null,
                 'privacy_notice' => $validated['privacy_notice'] ?? null,
-
-                // Product information
-                'product_title' => $validated['product_title'],
-                'product_message' => $validated['product_message'],
-                'product_name' => $validated['product_name'],
-                'product_image' => $validated['product_image'],
-
-                // Message content
-                'loading_title' => $validated['loading_title'],
-                'loading_message' => $validated['loading_message'],
-                'completed_title' => $validated['completed_title'],
-                'completed_message' => $validated['completed_message'],
-                'expired_title' => $validated['expired_title'],
-                'expired_message' => $validated['expired_message'],
                 
                 // Initial status
                 'status' => 'pending',
-            ]);
+            ];
+
+            // Template fields - copy from template if template_id provided, or use overrides if explicitly provided
+            $templateFields = [
+                'client_ref', 'client_name', 'client_image', 'client_url', 'contact_url', 
+                'privacy_url', 'theme_colour', 'product_title', 'product_message', 
+                'product_name', 'product_image', 'loading_title', 'loading_message', 
+                'completed_title', 'completed_message', 'expired_title', 'expired_message', 'communication_channels'
+            ];
+
+            // If template_id is provided, copy template values for historical tracking
+            if (!empty($validated['template_id'])) {
+                $template = Template::find($validated['template_id']);
+                if ($template) {
+                    foreach ($templateFields as $field) {
+                        // Use explicit override if provided, otherwise copy from template
+                        if (isset($validated[$field]) && !is_null($validated[$field])) {
+                            $customerData[$field] = $validated[$field]; // Override
+                        } else {
+                            $customerData[$field] = $template->{$field}; // Copy from template
+                        }
+                    }
+                }
+            } else {
+                // No template - only set fields that are explicitly provided
+                foreach ($templateFields as $field) {
+                    if (isset($validated[$field]) && !is_null($validated[$field])) {
+                        $customerData[$field] = $validated[$field];
+                    }
+                }
+            }
+
+            // Create customer record
+            $customer = Customer::create($customerData);
 
             // Generate URLs with configurable expiry time
             $expiryMinutes = config('app.claim_url_expiry_minutes', 2880);
@@ -549,9 +527,26 @@ class ProductClaimController extends Controller
 
     /**
      * Display the template creation page for claim free product forms
+     * Requires signed URL for authentication
      */
-    public function createTemplate()
+    public function createTemplate(Request $request)
     {
+        // Check if request has valid signature (signed URL authentication)
+        if (!$request->hasValidSignature()) {
+            Log::warning('Unauthorized template creation attempt', [
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'url' => $request->fullUrl()
+            ]);
+            
+            abort(403, 'Access denied. This page requires a valid signed URL.');
+        }
+
+        // Generate a signed URL for the store route with same expiry as current request
+        $storeSignedUrl = URL::temporarySignedRoute(
+            'template.store',
+            now()->addHours(4)
+        );
 
         $clients = DB::connection('halo_config')->table('client_tables')
         ->select('unq_id as id', 'clientref as client_ref', 'clientname as client_name')
@@ -575,10 +570,12 @@ class ProductClaimController extends Controller
             'surname' => 'Smith',
             'client_image' => 'afs-logo.png',
             'client_name' => 'Angel Charity Services',
-            'loading_title' => 'Preparing Your Free {{product_name}}',
+            'loading_title' => 'Preparing Your Free {{product_name}}!',
             'loading_message' => 'Setting up your personalized claim form...',
             'completed_title' => 'Thank You!',
             'completed_message' => 'Your free {{product_name}} claim has been submitted successfully. We\'ll process your request and arrange delivery soon.',
+            'expired_title' => 'This claim form has now expired.',
+            'expired_message' => 'This {{product_name}} claim link has expired and is no longer valid.',
             'product_title' => 'Claim Your Free {{product_name}}',
             'product_message' => 'Complete this form to claim your free {{product_name}}. We\'ll use your details to arrange delivery and keep you updated.',
             'product_name' => 'Pin Badge',
@@ -589,6 +586,7 @@ class ProductClaimController extends Controller
             'privacy_notice' => 'By claiming your free product, you agree to our terms of service and privacy policy. Your information will be used solely for product delivery and customer support. We will never sell or share your personal information with third parties without your consent.',
             'theme_colour' => '#008DA9',
             'clients' => $clients,
+            'store_url' => $storeSignedUrl,
             'communication_channels' => [
                 [
                     'channel' => 'email',
@@ -609,5 +607,238 @@ class ProductClaimController extends Controller
         ];
 
         return Inertia::render('Forms/CreateClaimFreeProductTemplate', $templateData);
+    }
+
+    /**
+     * Store a new template from the template builder
+     * Requires signed URL for authentication
+     */
+    public function storeTemplate(Request $request)
+    {
+        try {
+            // Check if request has valid signature (signed URL authentication)
+            if (!$request->hasValidSignature()) {
+                Log::warning('Unauthorized template store attempt', [
+                    'ip' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                    'request_data' => $request->all()
+                ]);
+                
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Access denied. Invalid or expired signed URL.',
+                    'error_code' => 'INVALID_SIGNATURE'
+                ], 403);
+            }
+
+            // Validate the template data structure
+            $validated = $request->validate([
+                // Prerequisites section
+                'prerequisites.client_ref' => 'required|string|max:100',
+                'prerequisites.client_name' => 'required|string|max:255',
+                'prerequisites.client_image' => 'nullable|string|max:500',
+                'prerequisites.client_image_file' => 'nullable|file|mimes:jpeg,jpg,png,gif,webp|max:2048',
+                'prerequisites.product_name' => 'required|string|max:255',
+                'prerequisites.product_image' => 'nullable|string|max:500',
+                'prerequisites.product_image_file' => 'nullable|file|mimes:jpeg,jpg,png,gif,webp|max:5120',
+                'prerequisites.client_url' => 'nullable|url|max:500',
+                'prerequisites.contact_url' => 'nullable|url|max:500',
+                'prerequisites.privacy_url' => 'nullable|url|max:500',
+                
+                // Template content section
+                'template.loading_title' => 'nullable|string|max:500',
+                'template.loading_message' => 'nullable|string|max:1000',
+                'template.completed_title' => 'nullable|string|max:500',
+                'template.completed_message' => 'nullable|string|max:1000',
+                'template.expired_title' => 'nullable|string|max:500',
+                'template.expired_message' => 'nullable|string|max:1000',
+                'template.form_title' => 'nullable|string|max:500',
+                'template.form_message' => 'nullable|string|max:1000',
+                'template.privacy_notice' => 'nullable|string|max:2000',
+                'template.theme_colour' => ['nullable', 'string', 'regex:/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/'],
+                
+                // Communication preferences
+                'template.communication_preferences' => 'nullable|array',
+                'template.communication_preferences.*.enabled' => 'boolean',
+                'template.communication_preferences.*.value' => 'string|max:50',
+                'template.communication_preferences.*.label' => 'string|max:255',
+                'template.communication_preferences.*.type' => 'string|in:opt-in,opt-out',
+            ]);
+
+            // Handle file uploads if present
+            $templateData = [];
+            
+            // Process client image upload
+            if ($request->hasFile('prerequisites.client_image_file')) {
+                $clientImageFile = $request->file('prerequisites.client_image_file');
+                
+                // Upload file with random filename to prevent conflicts
+                $clientImagePath = $clientImageFile->store('clients/images/logos', 'r2-public');
+                $templateData['client_image'] = basename($clientImagePath);
+                
+                Log::info('Client image uploaded to bucket', [
+                    'uploaded_path' => $clientImagePath,
+                    'original_filename' => $clientImageFile->getClientOriginalName(),
+                    'stored_filename' => basename($clientImagePath)
+                ]);
+            } else {
+                // Extract filename from URL if provided
+                $clientImageUrl = $validated['prerequisites']['client_image'] ?? null;
+                
+                // Check if we have a URL and it's not empty
+                if ($clientImageUrl && !empty(trim($clientImageUrl))) {
+                    // Extract filename from URL (e.g., "https://cdn.angelfs.co.uk/clients/images/logos/ss-logo.png" -> "ss-logo.png")
+                    $templateData['client_image'] = basename($clientImageUrl);
+                } else {
+                    $templateData['client_image'] = null;
+                }
+            }
+
+            // Process product image upload
+            if ($request->hasFile('prerequisites.product_image_file')) {
+                $productImageFile = $request->file('prerequisites.product_image_file');
+                
+                // Upload file with random filename to prevent conflicts
+                $productImagePath = $productImageFile->store('clients/images/products', 'r2-public');
+                $templateData['product_image'] = basename($productImagePath);
+                
+                Log::info('Product image uploaded to bucket', [
+                    'uploaded_path' => $productImagePath,
+                    'original_filename' => $productImageFile->getClientOriginalName(),
+                    'stored_filename' => basename($productImagePath)
+                ]);
+            } else {
+                // Extract filename from URL if provided
+                $productImageUrl = $validated['prerequisites']['product_image'] ?? null;
+                if ($productImageUrl && !empty(trim($productImageUrl))) {
+                    // Extract filename from URL
+                    $templateData['product_image'] = basename($productImageUrl);
+                } else {
+                    $templateData['product_image'] = null;
+                }
+            }
+
+            // Map form data to template model structure
+            $templateData = array_merge($templateData, [
+                'client_ref' => $validated['prerequisites']['client_ref'],
+                'client_name' => $validated['prerequisites']['client_name'],
+                'client_url' => $validated['prerequisites']['client_url'] ?? null,
+                'contact_url' => $validated['prerequisites']['contact_url'] ?? null,
+                'privacy_url' => $validated['prerequisites']['privacy_url'] ?? null,
+                'product_name' => $validated['prerequisites']['product_name'],
+                'loading_title' => $validated['template']['loading_title'] ?? null,
+                'loading_message' => $validated['template']['loading_message'] ?? null,
+                'completed_title' => $validated['template']['completed_title'] ?? null,
+                'completed_message' => $validated['template']['completed_message'] ?? null,
+                'expired_title' => $validated['template']['expired_title'] ?? null,
+                'expired_message' => $validated['template']['expired_message'] ?? null,
+                'product_title' => $validated['template']['form_title'] ?? null,
+                'product_message' => $validated['template']['form_message'] ?? null,
+                'theme_colour' => $validated['template']['theme_colour'] ?? '#008DA9',
+            ]);
+
+            // Process communication preferences - only include enabled ones
+            $communicationChannels = [];
+            if (isset($validated['template']['communication_preferences'])) {
+                foreach ($validated['template']['communication_preferences'] as $channel => $preferences) {
+                    // Convert string '1'/'0' to boolean for enabled check
+                    $enabled = is_string($preferences['enabled']) ? $preferences['enabled'] === '1' : (bool)$preferences['enabled'];
+                    
+                    if ($enabled) {
+                        $communicationChannels[] = [
+                            'channel' => $preferences['value'],
+                            'label' => $preferences['label'],
+                            'type' => $preferences['type']
+                        ];
+                    }
+                }
+            }
+            $templateData['communication_channels'] = $communicationChannels;
+
+            // Create the template record
+            $template = Template::create($templateData);
+
+            // Log successful creation
+            Log::info('Template created successfully', [
+                'template_id' => $template->id,
+                'client_ref' => $template->client_ref,
+                'product_name' => $template->product_name,
+                'communication_channels_count' => count($communicationChannels),
+                'communication_channels' => $communicationChannels,
+                'created_by_ip' => $request->ip()
+            ]);
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'template_id' => $template->id,
+                    'client_ref' => $template->client_ref,
+                    'product_name' => $template->product_name,
+                    'created_at' => $template->created_at->toISOString()
+                ],
+                'message' => 'Template created successfully!'
+            ], 201);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed.',
+                'errors' => $e->errors(),
+                'error_code' => 'VALIDATION_ERROR'
+            ], 422);
+
+        } catch (\Exception $e) {
+            // Log the error for debugging
+            Log::error('Failed to create template', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->all()
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred while creating the template.',
+                'error_code' => 'INTERNAL_ERROR'
+            ], 500);
+        }
+    }
+
+    /**
+     * Generate a signed URL for template creation access
+     * This method would be called from your external system
+     */
+    public function generateTemplateCreationUrl()
+    {
+        try {
+            // Generate a signed URL valid for 4 hours
+            $expiryTime = now()->addHours(4);
+            
+            $signedUrl = URL::temporarySignedRoute(
+                'template.create',
+                $expiryTime
+            );
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'signed_url' => $signedUrl,
+                    'expires_at' => $expiryTime->toISOString(),
+                    'expires_in_hours' => 4
+                ],
+                'message' => 'Signed URL generated successfully for template creation.'
+            ], 200);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to generate template creation URL', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to generate signed URL.',
+                'error_code' => 'URL_GENERATION_ERROR'
+            ], 500);
+        }
     }
 }

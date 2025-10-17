@@ -5,6 +5,7 @@ namespace App\Models\App;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Casts\EncryptedWithCustomKey;
+use App\Models\App\Template;
 
 class Customer extends Model
 {
@@ -15,6 +16,7 @@ class Customer extends Model
 
     protected $fillable = [
         'guid',
+        'template_id',
         'client_ref',
         'ngn',
         'client_image',
@@ -192,5 +194,70 @@ class Customer extends Model
         $this->update([
             'status' => 'expired'
         ]);
+    }
+
+    /**
+     * Get the template associated with this customer claim.
+     */
+    public function template()
+    {
+        return $this->belongsTo(Template::class, 'template_id');
+    }
+
+    /**
+     * Get a template field value, falling back to template default if not overridden.
+     *
+     * @param string $field
+     * @return mixed
+     */
+    public function getTemplateField(string $field)
+    {
+        // If the field is set on this claim, use it (override)
+        if (!is_null($this->getAttribute($field))) {
+            return $this->getAttribute($field);
+        }
+
+        // Otherwise, fall back to the template default
+        if ($this->template) {
+            return $this->template->getAttribute($field);
+        }
+
+        return null;
+    }
+
+    /**
+     * Get all template fields with proper inheritance.
+     *
+     * @return array
+     */
+    public function getTemplateConfig(): array
+    {
+        $templateFields = [
+            'client_ref',
+            'ngn',
+            'client_image',
+            'client_name',
+            'loading_title',
+            'loading_message',
+            'completed_title',
+            'completed_message',
+            'expired_title',
+            'expired_message',
+            'product_title',
+            'product_message',
+            'product_name',
+            'product_image',
+            'client_url',
+            'contact_url',
+            'privacy_url',
+            'theme_colour',
+        ];
+
+        $config = [];
+        foreach ($templateFields as $field) {
+            $config[$field] = $this->getTemplateField($field);
+        }
+
+        return $config;
     }
 }

@@ -13,6 +13,7 @@ export default function TextInput(props) {
     onTextChange, 
     returnRaw, 
     onBlur, 
+    onPaste,
     error, 
     clearErrors,
     uppercase = false, 
@@ -54,6 +55,7 @@ export default function TextInput(props) {
                   spellCheck={spellCheck}
                   onChange={ e => { handleTextChange(e.target);}}
                   onBlur={ e => { if(onBlur) onBlur([id]);}}
+                  onPaste={ e => { if(onPaste) onPaste(e);}}
                   id={id}
                   autoComplete={autoComplete}
                   className={`block flex-1 border-0 bg-transparent py-1.5 pl-3 ${error ? "text-red-800 dark:text-red-900" : "text-gray-900 dark:text-dark-100"} placeholder:text-gray-400 dark:placeholder:text-dark-500 focus:ring-0 sm:text-sm sm:leading-6 focus:outline-none disabled:text-gray-600 dark:disabled:text-dark-500 disabled:cursor-not-allowed`}

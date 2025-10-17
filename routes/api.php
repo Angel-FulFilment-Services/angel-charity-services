@@ -36,3 +36,9 @@ Route::get('customer/get-callback/GUID={guid}', [ProductClaimController::class, 
     ->withoutMiddleware('throttle:api')
     ->middleware('throttle:2000,1')
     ->middleware('auth:api');
+
+// API route for generating signed template creation URLs
+Route::post('template/generate-template-url', [ProductClaimController::class, 'generateTemplateCreationUrl'])->name('template.generate-url')
+    ->withoutMiddleware('throttle:api')
+    ->middleware('throttle:2000,1')
+    ->middleware('auth:api');

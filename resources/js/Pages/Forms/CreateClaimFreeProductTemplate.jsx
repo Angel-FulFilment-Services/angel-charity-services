@@ -9,9 +9,24 @@ import Lottie from 'lottie-react';
 import { getColors, replaceColor } from 'lottie-colorify';
 import animationLoading from '../../../animations/gift.json';
 import animationSuccess from '../../../animations/success.json';
+import animationTimeout from '../../../animations/timer.json';
 import { generateColorScale, injectThemeColors, replaceAnimationColors } from '../../Utils/Color';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { 
+  validateRequired, 
+  validateIsLength, 
+  validateIsURL,
+  validateIsAlpha,
+  validateIsHexColor
+} from '../../Utils/Validation';
+import { 
+  sanitizeTrim, 
+  sanitizeEscape,
+  sanitizeToUpperCase,
+  sanitizeProperCase,
+  stripHtmlTags 
+} from '../../Utils/Sanitisers';
 import { 
   UserIcon, 
   HomeIcon, 
@@ -26,17 +41,21 @@ import {
   CogIcon,
   DocumentTextIcon,
   ClipboardDocumentListIcon,
-  LinkIcon
+  LinkIcon,
+  ClockIcon
 } from '@heroicons/react/24/outline';
 import { ring } from 'ldrs';
 
 
 export default function CreateClaimFreeProductTemplate({ 
   clients,
+  store_url,
   loading_title,
   loading_message,
   completed_title,
   completed_message,
+  expired_title,
+  expired_message,
   product_title,
   product_message,
   privacy_notice,
@@ -54,9 +73,10 @@ export default function CreateClaimFreeProductTemplate({
 
   const [animationDataLoading, setAnimationDataLoading] = useState(null);
   const [animationDataSuccess, setAnimationDataSuccess] = useState(null);
+  const [animationDataTimeout, setAnimationDataTimeout] = useState(null);
 
   // Template preview mode state - controls which screen is shown
-  const [previewMode, setPreviewMode] = useState('prerequisites'); // 'prerequisites', 'loading', 'form', 'completed'
+  const [previewMode, setPreviewMode] = useState('prerequisites'); // 'prerequisites', 'loading', 'form', 'completed', 'expired', 'success'
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [animationKey, setAnimationKey] = useState(0); // Force Lottie restart
 
@@ -66,8 +86,10 @@ export default function CreateClaimFreeProductTemplate({
     setAnimationKey(prev => prev + 1);
     
     // Scroll to top instantly when switching to prerequisites or form
-    if (newMode === 'prerequisites' || newMode === 'form') {
-      window.scrollTo(0, 0);
+    if (newMode === 'prerequisites' && prerequisitesScrollRef.current) {
+      prerequisitesScrollRef.current.scrollTo(0, 0);
+    } else if (newMode === 'form' && formScrollRef.current) {
+      formScrollRef.current.scrollTo(0, 0);
     }
     
     if (newMode === previewMode) {
@@ -86,6 +108,8 @@ export default function CreateClaimFreeProductTemplate({
 
   // Ref for scroll hint
   const scrollRef = useRef(null);
+  const prerequisitesScrollRef = useRef(null);
+  const formScrollRef = useRef(null);
 
   // Register LDRS component
   useEffect(() => {
@@ -122,6 +146,22 @@ export default function CreateClaimFreeProductTemplate({
       ]);
 
       setAnimationDataSuccess(replaceAnimationColors(getColors(animationSuccess), targetColoursSuccess, animationSuccess));
+
+      const targetColoursTimeout = Object.values([
+        colours[6],
+        colours[3],
+        colours[1],
+        colours[2],
+        colours[5],
+        colours[1],
+        colours[1],
+        colours[3],
+        colours[1],
+        colours[0],
+        colours[4],
+      ]);
+
+      setAnimationDataTimeout(replaceAnimationColors(getColors(animationTimeout), targetColoursTimeout, animationTimeout));
 
       injectThemeColors(colourScale);
     }
@@ -371,6 +411,8 @@ export default function CreateClaimFreeProductTemplate({
       loading_message: loading_message,
       completed_title: completed_title,
       completed_message: completed_message,
+      expired_title: expired_title,
+      expired_message: expired_message,
       form_title: product_title,
       form_message: product_message,
       privacy_notice: privacy_notice,
@@ -384,8 +426,224 @@ export default function CreateClaimFreeProductTemplate({
     }
   });
 
+  // Form validation errors
+  const [errors, setErrors] = useState({});
+
+  // Clear errors when field changes
+  const clearError = (field) => {
+    if (errors[field]) {
+      setErrors(prev => ({
+        ...prev,
+        [field]: null
+      }));
+    }
+  };
+
+  // Validation functions
+  const validateForm = () => {
+    const newErrors = {};
+
+    // Prerequisites validation
+    const clientRefError = validateRequired(formData.prerequisites.client_ref, 'Client reference');
+    if (clientRefError) {
+      newErrors['prerequisites.client_ref'] = typeof clientRefError === 'object' ? clientRefError.message : clientRefError;
+    }
+
+    const clientNameError = validateRequired(formData.prerequisites.client_name, 'Client name');
+    if (clientNameError) {
+      newErrors['prerequisites.client_name'] = typeof clientNameError === 'object' ? clientNameError.message : clientNameError;
+    } else {
+      const clientNameLengthError = validateIsLength(formData.prerequisites.client_name, {
+        validatorOptions: { min: 2, max: 255 },
+        customMessage: 'Client name must be between 2 and 255 characters'
+      });
+      if (clientNameLengthError) {
+        newErrors['prerequisites.client_name'] = typeof clientNameLengthError === 'object' ? clientNameLengthError.message : clientNameLengthError;
+      }
+    }
+
+    const productNameError = validateRequired(formData.prerequisites.product_name, 'Product name');
+    if (productNameError) {
+      newErrors['prerequisites.product_name'] = typeof productNameError === 'object' ? productNameError.message : productNameError;
+    } else {
+      const productNameLengthError = validateIsLength(formData.prerequisites.product_name, {
+        validatorOptions: { min: 2, max: 255 },
+        customMessage: 'Product name must be between 2 and 255 characters'
+      });
+      if (productNameLengthError) {
+        newErrors['prerequisites.product_name'] = typeof productNameLengthError === 'object' ? productNameLengthError.message : productNameLengthError;
+      }
+    }
+
+    // URL validations (optional fields)
+    if (formData.prerequisites.client_url && formData.prerequisites.client_url.trim()) {
+      const clientUrlError = validateIsURL(formData.prerequisites.client_url, {
+        customMessage: 'Please enter a valid client URL'
+      });
+      if (clientUrlError) {
+        newErrors['prerequisites.client_url'] = typeof clientUrlError === 'object' ? clientUrlError.message : clientUrlError;
+      }
+    }
+
+    if (formData.prerequisites.contact_url && formData.prerequisites.contact_url.trim()) {
+      const contactUrlError = validateIsURL(formData.prerequisites.contact_url, {
+        customMessage: 'Please enter a valid contact URL'
+      });
+      if (contactUrlError) {
+        newErrors['prerequisites.contact_url'] = typeof contactUrlError === 'object' ? contactUrlError.message : contactUrlError;
+      }
+    }
+
+    if (formData.prerequisites.privacy_url && formData.prerequisites.privacy_url.trim()) {
+      const privacyUrlError = validateIsURL(formData.prerequisites.privacy_url, {
+        customMessage: 'Please enter a valid privacy URL'
+      });
+      if (privacyUrlError) {
+        newErrors['prerequisites.privacy_url'] = typeof privacyUrlError === 'object' ? privacyUrlError.message : privacyUrlError;
+      }
+    }
+
+    // Template validation
+    if (formData.template.loading_title && formData.template.loading_title.trim()) {
+      const loadingTitleLengthError = validateIsLength(formData.template.loading_title, {
+        validatorOptions: { max: 500 },
+        customMessage: 'Loading title must be less than 500 characters'
+      });
+      if (loadingTitleLengthError) {
+        newErrors['template.loading_title'] = typeof loadingTitleLengthError === 'object' ? loadingTitleLengthError.message : loadingTitleLengthError;
+      }
+    }
+
+    if (formData.template.loading_message && formData.template.loading_message.trim()) {
+      const loadingMessageLengthError = validateIsLength(formData.template.loading_message, {
+        validatorOptions: { max: 1000 },
+        customMessage: 'Loading message must be less than 1000 characters'
+      });
+      if (loadingMessageLengthError) {
+        newErrors['template.loading_message'] = typeof loadingMessageLengthError === 'object' ? loadingMessageLengthError.message : loadingMessageLengthError;
+      }
+    }
+
+    if (formData.template.completed_title && formData.template.completed_title.trim()) {
+      const completedTitleLengthError = validateIsLength(formData.template.completed_title, {
+        validatorOptions: { max: 500 },
+        customMessage: 'Completed title must be less than 500 characters'
+      });
+      if (completedTitleLengthError) {
+        newErrors['template.completed_title'] = typeof completedTitleLengthError === 'object' ? completedTitleLengthError.message : completedTitleLengthError;
+      }
+    }
+
+    if (formData.template.completed_message && formData.template.completed_message.trim()) {
+      const completedMessageLengthError = validateIsLength(formData.template.completed_message, {
+        validatorOptions: { max: 1000 },
+        customMessage: 'Completed message must be less than 1000 characters'
+      });
+      if (completedMessageLengthError) {
+        newErrors['template.completed_message'] = typeof completedMessageLengthError === 'object' ? completedMessageLengthError.message : completedMessageLengthError;
+      }
+    }
+
+    if (formData.template.expired_title && formData.template.expired_title.trim()) {
+      const expiredTitleLengthError = validateIsLength(formData.template.expired_title, {
+        validatorOptions: { max: 500 },
+        customMessage: 'Expired title must be less than 500 characters'
+      });
+      if (expiredTitleLengthError) {
+        newErrors['template.expired_title'] = typeof expiredTitleLengthError === 'object' ? expiredTitleLengthError.message : expiredTitleLengthError;
+      }
+    }
+
+    if (formData.template.expired_message && formData.template.expired_message.trim()) {
+      const expiredMessageLengthError = validateIsLength(formData.template.expired_message, {
+        validatorOptions: { max: 1000 },
+        customMessage: 'Expired message must be less than 1000 characters'
+      });
+      if (expiredMessageLengthError) {
+        newErrors['template.expired_message'] = typeof expiredMessageLengthError === 'object' ? expiredMessageLengthError.message : expiredMessageLengthError;
+      }
+    }
+
+    if (formData.template.form_title && formData.template.form_title.trim()) {
+      const formTitleLengthError = validateIsLength(formData.template.form_title, {
+        validatorOptions: { max: 500 },
+        customMessage: 'Form title must be less than 500 characters'
+      });
+      if (formTitleLengthError) {
+        newErrors['template.form_title'] = typeof formTitleLengthError === 'object' ? formTitleLengthError.message : formTitleLengthError;
+      }
+    }
+
+    if (formData.template.form_message && formData.template.form_message.trim()) {
+      const formMessageLengthError = validateIsLength(formData.template.form_message, {
+        validatorOptions: { max: 1000 },
+        customMessage: 'Form message must be less than 1000 characters'
+      });
+      if (formMessageLengthError) {
+        newErrors['template.form_message'] = typeof formMessageLengthError === 'object' ? formMessageLengthError.message : formMessageLengthError;
+      }
+    }
+
+    if (formData.template.privacy_notice && formData.template.privacy_notice.trim()) {
+      const privacyNoticeLengthError = validateIsLength(formData.template.privacy_notice, {
+        validatorOptions: { max: 2000 },
+        customMessage: 'Privacy notice must be less than 2000 characters'
+      });
+      if (privacyNoticeLengthError) {
+        newErrors['template.privacy_notice'] = typeof privacyNoticeLengthError === 'object' ? privacyNoticeLengthError.message : privacyNoticeLengthError;
+      }
+    }
+
+    // Theme color validation
+    if (formData.template.theme_colour && formData.template.theme_colour.trim()) {
+      const themeColorError = validateIsHexColor(formData.template.theme_colour, {
+        customMessage: 'Please enter a valid hex color (e.g., #FF0000)'
+      });
+      if (themeColorError) {
+        newErrors['template.theme_colour'] = typeof themeColorError === 'object' ? themeColorError.message : themeColorError;
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Sanitization function to clean data before backend submission
+  const sanitizeFormData = (data) => {
+    return {
+      prerequisites: {
+        client_ref: sanitizeTrim(sanitizeEscape(data.prerequisites.client_ref)),
+        client_name: sanitizeProperCase(sanitizeTrim(sanitizeEscape(data.prerequisites.client_name))),
+        client_image: data.prerequisites.client_image,
+        client_image_file: data.prerequisites.client_image_file,
+        product_name: sanitizeProperCase(sanitizeTrim(sanitizeEscape(data.prerequisites.product_name))),
+        product_image: data.prerequisites.product_image,
+        product_image_file: data.prerequisites.product_image_file,
+        client_url: data.prerequisites.client_url ? sanitizeTrim(data.prerequisites.client_url) : '',
+        contact_url: data.prerequisites.contact_url ? sanitizeTrim(data.prerequisites.contact_url) : '',
+        privacy_url: data.prerequisites.privacy_url ? sanitizeTrim(data.prerequisites.privacy_url) : '',
+      },
+      template: {
+        loading_title: data.template.loading_title ? sanitizeTrim(stripHtmlTags(data.template.loading_title)) : '',
+        loading_message: data.template.loading_message ? sanitizeTrim(stripHtmlTags(data.template.loading_message)) : '',
+        completed_title: data.template.completed_title ? sanitizeTrim(stripHtmlTags(data.template.completed_title)) : '',
+        completed_message: data.template.completed_message ? sanitizeTrim(stripHtmlTags(data.template.completed_message)) : '',
+        expired_title: data.template.expired_title ? sanitizeTrim(stripHtmlTags(data.template.expired_title)) : '',
+        expired_message: data.template.expired_message ? sanitizeTrim(stripHtmlTags(data.template.expired_message)) : '',
+        form_title: data.template.form_title ? sanitizeTrim(stripHtmlTags(data.template.form_title)) : '',
+        form_message: data.template.form_message ? sanitizeTrim(stripHtmlTags(data.template.form_message)) : '',
+        privacy_notice: data.template.privacy_notice ? sanitizeTrim(stripHtmlTags(data.template.privacy_notice)) : '',
+        theme_colour: data.template.theme_colour ? sanitizeTrim(data.template.theme_colour) : '#008DA9',
+        communication_preferences: data.template.communication_preferences
+      }
+    };
+  };
+
   // Apply template replacements - use form data state 
   const handlePrerequisitesChange = (field, value) => {
+    // Clear error when field changes
+    clearError(`prerequisites.${field}`);
+    
     setFormData(prev => ({
       ...prev,
       prerequisites: {
@@ -396,6 +654,9 @@ export default function CreateClaimFreeProductTemplate({
   };
 
   const handleTemplateChange = (field, value) => {
+    // Clear error when field changes
+    clearError(`template.${field}`);
+    
     setFormData(prev => ({
       ...prev,
       template: {
@@ -444,25 +705,128 @@ export default function CreateClaimFreeProductTemplate({
     }
   };
 
-  const handleSaveTemplate = () => {
-    console.log('Form Data:', formData);
-    // TODO: Send data to backend for saving
-    toast.success('Template data logged to console', {
-      position: 'top-center',
-      autoClose: 3000,
-      hideProgressBar: false,
-      closeOnClick: true,
-      pauseOnHover: false,
-      draggable: true,
-      progress: undefined,
-      theme: 'light',
-    });
+  const handleSaveTemplate = async () => {
+    try {
+      // Validate form data first
+      if (!validateForm()) {
+        return;
+      }
+
+      // Sanitize form data
+      const sanitizedData = sanitizeFormData(formData);
+
+      // Create FormData for file uploads
+      const submitData = new FormData();
+
+      // Add prerequisites data (exclude image URLs when files are being uploaded)
+      Object.keys(sanitizedData.prerequisites).forEach(key => {
+        const value = sanitizedData.prerequisites[key];
+        if (key !== 'client_image_file' && key !== 'product_image_file') {
+          // Skip image URLs if we have file uploads for them
+          if (key === 'client_image' && formData.prerequisites.client_image_file instanceof File) {
+            return;
+          }
+          if (key === 'product_image' && formData.prerequisites.product_image_file instanceof File) {
+            return;
+          }
+          submitData.append(`prerequisites[${key}]`, value || '');
+        }
+      });
+
+      // Add template data (don't filter out empty strings)
+      Object.keys(sanitizedData.template).forEach(key => {
+        const value = sanitizedData.template[key];
+        if (key !== 'communication_preferences') {
+          submitData.append(`template[${key}]`, value || '');
+        }
+      });
+
+      // Add communication preferences with proper boolean conversion
+      if (sanitizedData.template.communication_preferences) {
+        Object.keys(sanitizedData.template.communication_preferences).forEach(type => {
+          const pref = sanitizedData.template.communication_preferences[type];
+          Object.keys(pref).forEach(field => {
+            let value = pref[field];
+            // Convert boolean values to strings that Laravel can understand
+            if (typeof value === 'boolean') {
+              value = value ? '1' : '0';
+            }
+            submitData.append(`template[communication_preferences][${type}][${field}]`, value);
+          });
+        });
+      }
+
+      // Add file uploads if they exist (check for actual File objects, not empty strings)
+      if (formData.prerequisites.client_image_file && formData.prerequisites.client_image_file instanceof File) {
+        submitData.append('prerequisites[client_image_file]', formData.prerequisites.client_image_file);
+      }
+      if (formData.prerequisites.product_image_file && formData.prerequisites.product_image_file instanceof File) {
+        submitData.append('prerequisites[product_image_file]', formData.prerequisites.product_image_file);
+      }
+
+      // Submit to backend using the provided signed store URL
+      const response = await fetch(store_url, {
+        method: 'POST',
+        headers: {
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+          // Don't set Content-Type for FormData - browser will set it with boundary
+        },
+        body: submitData
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.status === 'success') {
+        // Show success screen with proper transition
+        handlePreviewModeChange('success');
+      } else {
+        // Handle backend validation errors
+        if (result.errors) {
+          const backendErrors = {};
+          Object.keys(result.errors).forEach(key => {
+            backendErrors[key] = Array.isArray(result.errors[key]) ? result.errors[key][0] : result.errors[key];
+          });
+          setErrors(backendErrors);
+        } else {
+          throw new Error(result.message || 'Failed to save template');
+        }
+      }
+
+    } catch (error) {
+      console.error('Save failed:', error);
+      
+      // Handle network errors or unexpected errors
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        toast.error('Network error: Please check your connection and try again', {
+          position: 'top-center',
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: false,
+          draggable: true,
+          progress: undefined,
+          theme: 'light',
+        });
+      } else {
+        toast.error(`Failed to save template: ${error.message}`, {
+          position: 'top-center',
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: false,
+          draggable: true,
+          progress: undefined,
+          theme: 'light',
+        });
+      }
+    }
   };
 
   return (
     <div className="h-screen bg-gray-200 dark:bg-gray-900 relative overflow-hidden">
       {/* Fixed Right Sidebar - Substitution Key */}
-      <div className="fixed top-16 right-0 w-80 h-[calc(100vh-4rem)] bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 shadow-lg z-[999] overflow-y-auto">
+      {previewMode !== 'success' && (
+        <div className="fixed top-16 right-0 w-80 h-[calc(100vh-4rem)] bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 shadow-lg z-[999] overflow-y-auto">
         <div className="p-6">
           <div className="flex items-center space-x-2 mb-6">
             <ClipboardDocumentListIcon className="h-5 w-5 text-theme-600 dark:text-theme-500" />
@@ -501,6 +865,14 @@ export default function CreateClaimFreeProductTemplate({
                   Name of the supporter
                 </div>
               </div>
+
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                <div className="text-sm text-theme-400 dark:text-theme-400 mb-1 font-bold italic">
+                  {'{'}{'{'}ngn{'}'}{'}'}                </div>
+                <div className="text-xs text-gray-600 dark:text-gray-400">
+                  Return call telephone number
+                </div>
+              </div>
             </div>
             
             <div className="mt-6 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
@@ -515,17 +887,19 @@ export default function CreateClaimFreeProductTemplate({
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      )}
       
       {/* Template Configuration Header */}
-      <div className="fixed top-0 left-0 right-0 z-[1000] bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      {previewMode !== 'success' && (
+        <div className="fixed top-0 left-0 right-0 z-[1000] bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+        <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between h-16">
             
             {/* Template Name */}
             <div className="flex items-center space-x-3">
               <DocumentTextIcon className="h-6 w-6 text-theme-600 dark:text-theme-500" />
-              <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
+              <h1 className="text-lg font-semibold text-gray-900 dark:text-white hidden lg:block">
                 Create Template
               </h1>
             </div>
@@ -534,7 +908,7 @@ export default function CreateClaimFreeProductTemplate({
             <div className="flex items-center space-x-6">
               {/* Preview Mode Buttons */}
               <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-500 dark:text-gray-400 mr-3">Configure:</span>
+                <span className="text-sm text-gray-500 dark:text-gray-400 mr-3 hidden lg:block">Configure:</span>
 
                 <button
                   onClick={() => handlePreviewModeChange('prerequisites')}
@@ -583,6 +957,18 @@ export default function CreateClaimFreeProductTemplate({
                   <CheckCircleIcon className="h-4 w-4 mr-1.5" />
                   Completed
                 </button>
+
+                <button
+                  onClick={() => handlePreviewModeChange('expired')}
+                  className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                    previewMode === 'expired'
+                      ? 'bg-theme-100 text-theme-800 dark:bg-theme-900 dark:text-theme-200'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  <ClockIcon className="h-4 w-4 mr-1.5" />
+                  Expired
+                </button>
               </div>
             </div>
 
@@ -596,6 +982,7 @@ export default function CreateClaimFreeProductTemplate({
                   currentState={themeColour}
                   onColorChange={handleThemeColourChange}
                   showSwatches={true}
+                  error={errors['template.theme_colour']}
                 />
               </div>
               <button className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600">
@@ -611,7 +998,8 @@ export default function CreateClaimFreeProductTemplate({
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      )}
 
       {/* Add padding for fixed header */}
       <div className="">
@@ -734,8 +1122,123 @@ export default function CreateClaimFreeProductTemplate({
         </div>
       </div>
 
+      {/* Success Screen Overlay */}
+      <div 
+        className={`fixed top-0 left-0 right-0 bottom-0 flex items-center justify-center z-[1001] bg-gray-200 dark:bg-gray-900 transition-all duration-300 ${
+          previewMode === 'success' && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+      >
+        <div className="text-center w-full max-w-4xl">
+          {/* Success Animation */}
+          <div className={`relative mb-8 ${previewMode === 'success' && !isTransitioning ? 'animate-fadeInUp' : ''}`}>
+            <div className="h-96 w-96 mx-auto flex items-center justify-center">
+              {/* Success Checkmark or Animation */}
+              {animationDataSuccess && (
+                <Lottie
+                  key={`success-${animationKey}`}
+                  animationData={animationDataSuccess}
+                  loop={false}
+                  autoplay
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Success Text */}
+          <div className={`space-y-4 px-4 -mt-24 ${previewMode === 'success' && !isTransitioning ? 'animate-fadeInUp' : ''}`}
+               style={{ animationDelay: previewMode === 'success' && !isTransitioning ? '0.1s' : '0s' }}>
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white text-center">
+              Template Created Successfully!
+            </h2>
+            <p className="text-lg text-gray-600 dark:text-gray-300 max-w-md mx-auto text-center">
+              Your template has been saved and is ready to use. You can now create claim forms using this template configuration.
+            </p>
+            <div className="pt-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                You can now safely close this page or create another template.
+              </p>
+            </div>
+          </div>
+
+          {/* Logo at bottom */}
+          <div className={`mt-12 ${previewMode === 'success' && !isTransitioning ? 'animate-fadeInUp' : ''}`}
+               style={{ animationDelay: previewMode === 'success' && !isTransitioning ? '0.2s' : '0s' }}>
+            {formData.prerequisites.client_image && (
+              <img
+                alt={'Angel Charity Services'}
+                src={'https://cdn.angelfs.co.uk/clients/images/logos/afs-logo.png'}
+                className="mx-auto h-12 w-auto opacity-60"
+              />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Expired Screen Overlay */}
+      <div 
+        className={`fixed top-16 left-0 right-80 bottom-0 flex items-center justify-center z-50 bg-gray-200 dark:bg-gray-900 transition-all duration-300 ${
+          previewMode === 'expired' && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+      >
+        <div className="text-center w-full max-w-4xl">
+          {/* Expired Animation */}
+          <div className={`relative mb-8 ${previewMode === 'expired' && !isTransitioning ? 'animate-fadeInUp' : ''}`}>
+            <div className="h-52 w-52 mx-auto flex items-center justify-center">
+              {/* Timeout/Expired Animation */}
+              {animationDataTimeout && (
+                <Lottie
+                  key={`timeout-${animationKey}`}
+                  animationData={animationDataTimeout}
+                  loop={true}
+                  autoplay
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Expired Text */}
+          <div className={`space-y-4 px-4 -mb-10 ${previewMode === 'expired' && !isTransitioning ? 'animate-fadeInUp' : ''}`}
+               style={{ animationDelay: previewMode === 'expired' && !isTransitioning ? '0.1s' : '0s' }}>
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white text-center">
+              <InlineEditableText
+                value={formData.template.expired_title}
+                onChange={(value) => handleTemplateChange('expired_title', value)}
+                className="text-3xl font-bold text-gray-900 dark:text-white text-center block w-full"
+                placeholder="Enter expired title..."
+              />
+            </h2>
+            <p className="text-lg text-gray-600 dark:text-gray-300 max-w-md mx-auto text-center">
+              <InlineEditableText
+                value={formData.template.expired_message}
+                onChange={(value) => handleTemplateChange('expired_message', value)}
+                className="text-lg text-gray-600 dark:text-gray-300 text-center block w-full"
+                placeholder="Enter expired message..."
+              />
+            </p>
+            <div className="pt-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                You can now safely close this page.
+              </p>
+            </div>
+          </div>
+
+          {/* Logo at bottom */}
+          <div className={`mt-12 ${previewMode === 'expired' && !isTransitioning ? 'animate-fadeInUp' : ''}`}
+               style={{ animationDelay: previewMode === 'expired' && !isTransitioning ? '0.2s' : '0s' }}>
+            {formData.prerequisites.client_image && (
+              <img
+                alt={formData.prerequisites.client_name}
+                src={formData.prerequisites.client_image}
+                className="mx-auto h-12 w-auto opacity-60"
+              />
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Prerequisites Content */}
       <div 
+        ref={prerequisitesScrollRef}
         className={`fixed top-16 left-0 right-80 bottom-0 overflow-y-auto z-40 bg-gray-200 dark:bg-gray-900 transition-all duration-300 ${
           previewMode === 'prerequisites' && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
@@ -780,6 +1283,7 @@ export default function CreateClaimFreeProductTemplate({
                         items={clients}
                         onSelectChange={handleClientChange}
                         placeholder="Select a client"
+                        error={errors['prerequisites.client_ref']}
                       />
                     </div>
                   </div>
@@ -896,6 +1400,7 @@ export default function CreateClaimFreeProductTemplate({
                         currentState={formData.prerequisites.product_name}
                         onTextChange={(value) => handlePrerequisitesChange('product_name', value)}
                         Icon={GiftIcon}
+                        error={errors['prerequisites.product_name']}
                       />
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                         This will be used as the {'{{product_name}}'} variable throughout the template.
@@ -922,6 +1427,7 @@ export default function CreateClaimFreeProductTemplate({
                         currentState={formData.prerequisites.client_url}
                         onTextChange={(value) => handlePrerequisitesChange('client_url', value)}
                         Icon={LinkIcon}
+                        error={errors['prerequisites.client_url']}
                       />
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                         The main website URL for the client organization.
@@ -938,6 +1444,7 @@ export default function CreateClaimFreeProductTemplate({
                         currentState={formData.prerequisites.contact_url}
                         onTextChange={(value) => handlePrerequisitesChange('contact_url', value)}
                         Icon={LinkIcon}
+                        error={errors['prerequisites.contact_url']}
                       />
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                         Link to the contact or support page.
@@ -954,6 +1461,7 @@ export default function CreateClaimFreeProductTemplate({
                         currentState={formData.prerequisites.privacy_url}
                         onTextChange={(value) => handlePrerequisitesChange('privacy_url', value)}
                         Icon={LinkIcon}
+                        error={errors['prerequisites.privacy_url']}
                       />
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                         Link to the privacy policy page.
@@ -969,7 +1477,7 @@ export default function CreateClaimFreeProductTemplate({
 
       {/* Main Form Content */}
       <div 
-         ref={scrollRef}
+         ref={formScrollRef}
         className={`fixed top-16 left-0 right-80 bottom-0 overflow-y-auto z-40 bg-gray-200 dark:bg-gray-900 transition-all duration-300 ${
           previewMode === 'form' && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
@@ -1440,7 +1948,7 @@ export default function CreateClaimFreeProductTemplate({
       
       {/* Scroll Hint - only shown in form mode */}
       {previewMode === 'form' && (
-        <ScrollHint basic={true} scrollRef={scrollRef} hideThreshold={45} allowClick={false} size='h-4 w-4'>
+        <ScrollHint basic={true} scrollRef={formScrollRef} hideThreshold={45} allowClick={false} size='h-4 w-4'>
           <p className="text-sm text-gray-500 dark:text-gray-300 pr-1">
             Scroll to complete
           </p>
