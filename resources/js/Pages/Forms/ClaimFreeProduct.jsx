@@ -203,8 +203,8 @@ export default function ProductCapture({
   const displaySurname = surname;
   
   // Use temporary paths if available, otherwise use standard paths
-  const displayImage = (client_image_path ? r2bucketURL + client_image_path : null) || (client_image ? r2bucketURL + 'clients/images/logos/' + client_image : null);
-  const productImage = (product_image_path ? r2bucketURL + product_image_path : null) || (product_image ? r2bucketURL + 'clients/images/products/' + product_image : null);
+  const displayImage = (client_image_path ? r2bucketURL + client_image_path + client_image : null) || (client_image ? r2bucketURL + 'clients/images/logos/' + client_image : null);
+  const productImage = (product_image_path ? r2bucketURL + product_image_path + product_image : null) || (product_image ? r2bucketURL + 'clients/images/products/' + product_image : null);
 
   console.log(client_image_path);
   console.log(product_image_path);
@@ -243,8 +243,8 @@ export default function ProductCapture({
 
   const handleProductImageError = (e) => {
     // If we have a temp path and haven't tried it yet, try the temp path
-    if (product_image_path && e.target.src !== r2bucketURL + product_image_path) {
-      e.target.src = r2bucketURL + product_image_path;
+    if (product_image_path && e.target.src !== (r2bucketURL + product_image_path + product_image)) {
+      e.target.src = (r2bucketURL + product_image_path + product_image);
       return;
     }
     // If temp path also failed or we don't have one, mark as error
@@ -259,8 +259,8 @@ export default function ProductCapture({
 
   const handleClientImageError = (e) => {
     // If we have a temp path and haven't tried it yet, try the temp path
-    if (client_image_path && e.target.src !== r2bucketURL + client_image_path) {
-      e.target.src = r2bucketURL + client_image_path;
+    if (client_image_path && e.target.src !== (r2bucketURL + client_image_path + client_image)) {
+      e.target.src = (r2bucketURL + client_image_path + client_image);
       return;
     }
     // If temp path also failed or we don't have one, mark as error
