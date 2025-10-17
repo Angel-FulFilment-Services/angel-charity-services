@@ -186,7 +186,7 @@ export default function ProductCapture({
   const [clientImageError, setClientImageError] = useState(false);
 
   // Default values when props are null
-  const r2bucketURL = 'https://cdn.angelfs.co.uk/clients/images/';
+  const r2bucketURL = 'https://cdn.angelfs.co.uk/';
 
   // Template replacement function
   const replaceTemplateVariables = (template, variables) => {
@@ -203,8 +203,8 @@ export default function ProductCapture({
   const displaySurname = surname;
   
   // Use temporary paths if available, otherwise use standard paths
-  const displayImage = client_image_path || (client_image ? r2bucketURL + 'logos/' + client_image : null);
-  const productImage = product_image_path || (product_image ? r2bucketURL + 'products/' + product_image : null);
+  const displayImage = r2bucketURL + client_image_path || (client_image ? r2bucketURL + 'clients/images/logos/' + client_image : null);
+  const productImage = r2bucketURL + product_image_path || (product_image ? r2bucketURL + 'clients/images/products/' + product_image : null);
 
   const displayClientName = client_name;
   const displayProductName = product_name;
