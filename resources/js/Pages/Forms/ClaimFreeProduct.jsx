@@ -241,8 +241,8 @@ export default function ProductCapture({
 
   const handleProductImageError = (e) => {
     // If we have a temp path and haven't tried it yet, try the temp path
-    if (product_image_path && e.target.src !== product_image_path) {
-      e.target.src = product_image_path;
+    if (product_image_path && e.target.src !== r2bucketURL + product_image_path) {
+      e.target.src = r2bucketURL + product_image_path;
       return;
     }
     // If temp path also failed or we don't have one, mark as error
@@ -257,8 +257,8 @@ export default function ProductCapture({
 
   const handleClientImageError = (e) => {
     // If we have a temp path and haven't tried it yet, try the temp path
-    if (client_image_path && e.target.src !== client_image_path) {
-      e.target.src = client_image_path;
+    if (client_image_path && e.target.src !== r2bucketURL + client_image_path) {
+      e.target.src = r2bucketURL + client_image_path;
       return;
     }
     // If temp path also failed or we don't have one, mark as error
