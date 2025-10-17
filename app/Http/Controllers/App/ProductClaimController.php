@@ -605,6 +605,32 @@ class ProductClaimController extends Controller
             'theme_colour' => '#008DA9',
             'clients' => $clients,
             'store_url' => $storeSignedUrl,
+            'communication_channels' => [
+                [
+                    'enabled' => true,
+                    'channel' => 'post',
+                    'label' => 'I do not want to receive updates by post',
+                    'type' => 'opt-out'
+                ],
+                [
+                    'enabled' => true,
+                    'channel' => 'phone',
+                    'label' => 'I do not want to receive updates by telephone',
+                    'type' => 'opt-out'
+                ],
+                [
+                    'enabled' => true,
+                    'channel' => 'email',
+                    'label' => 'I would like to receive email updates',
+                    'type' => 'opt-in'
+                ],
+                [
+                    'enabled' => true,
+                    'channel' => 'sms',
+                    'label' => 'I would like to receive SMS messages', 
+                    'type' => 'opt-in'
+                ],
+            ]
         ];
 
         return Inertia::render('Forms/CreateClaimFreeProductTemplate', $templateData);
@@ -657,13 +683,13 @@ class ProductClaimController extends Controller
                 'template.form_message' => 'nullable|string|max:1000',
                 'template.privacy_notice' => 'nullable|string|max:2000',
                 'template.theme_colour' => ['nullable', 'string', 'regex:/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/'],
-                
-                // Communication preferences
-                'template.communication_preferences' => 'nullable|array',
-                'template.communication_preferences.*.enabled' => 'boolean',
-                'template.communication_preferences.*.value' => 'string|max:50',
-                'template.communication_preferences.*.label' => 'string|max:255',
-                'template.communication_preferences.*.type' => 'string|in:opt-in,opt-out',
+
+                // Communication channels
+                'template.communication_channels' => 'nullable|array',
+                'template.communication_channels.*.enabled' => 'boolean',
+                'template.communication_channels.*.value' => 'string|max:50',
+                'template.communication_channels.*.label' => 'string|max:255',
+                'template.communication_channels.*.type' => 'string|in:opt-in,opt-out',
             ]);
 
             // Handle file uploads if present
@@ -738,10 +764,10 @@ class ProductClaimController extends Controller
                 'theme_colour' => $validated['template']['theme_colour'] ?? '#008DA9',
             ]);
 
-            // Process communication preferences - only include enabled ones
+            // Process communication channels - only include enabled ones
             $communicationChannels = [];
-            if (isset($validated['template']['communication_preferences'])) {
-                foreach ($validated['template']['communication_preferences'] as $channel => $preferences) {
+            if (isset($validated['template']['communication_channels'])) {
+                foreach ($validated['template']['communication_channels'] as $channel => $preferences) {
                     // Convert string '1'/'0' to boolean for enabled check
                     $enabled = is_string($preferences['enabled']) ? $preferences['enabled'] === '1' : (bool)$preferences['enabled'];
                     
