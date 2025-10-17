@@ -206,6 +206,9 @@ export default function ProductCapture({
   const displayImage = r2bucketURL + client_image_path || (client_image ? r2bucketURL + 'clients/images/logos/' + client_image : null);
   const productImage = r2bucketURL + product_image_path || (product_image ? r2bucketURL + 'clients/images/products/' + product_image : null);
 
+  console.log(displayImage);
+  console.log(productImage);
+
   const displayClientName = client_name;
   const displayProductName = product_name;
   const clientUrl = client_url;
