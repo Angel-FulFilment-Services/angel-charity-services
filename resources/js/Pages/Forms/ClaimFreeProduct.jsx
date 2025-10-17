@@ -203,8 +203,8 @@ export default function ProductCapture({
   const displaySurname = surname;
   
   // Use temporary paths if available, otherwise use standard paths
-  const displayImage = r2bucketURL + client_image_path || (client_image ? r2bucketURL + 'clients/images/logos/' + client_image : null);
-  const productImage = r2bucketURL + product_image_path || (product_image ? r2bucketURL + 'clients/images/products/' + product_image : null);
+  const displayImage = (client_image_path ? r2bucketURL + client_image_path : null) || (client_image ? r2bucketURL + 'clients/images/logos/' + client_image : null);
+  const productImage = (product_image_path ? r2bucketURL + product_image_path : null) || (product_image ? r2bucketURL + 'clients/images/products/' + product_image : null);
 
   console.log(displayImage);
   console.log(productImage);
