@@ -84,7 +84,6 @@ export default function CreateClaimFreeProductTemplate({
     try {
       // Sanitize the form data before processing
       const sanitizedData = sanitizeFormData(templateData);
-      
       // Create FormData for file uploads (similar to save function)
       const submitData = new FormData();
 
@@ -519,6 +518,8 @@ export default function CreateClaimFreeProductTemplate({
     template: {
       loading_title: loading_title,
       loading_message: loading_message,
+      product_title: product_title,
+      product_message: product_message,
       completed_title: completed_title,
       completed_message: completed_message,
       expired_title: expired_title,
@@ -669,6 +670,26 @@ export default function CreateClaimFreeProductTemplate({
       }
     }
 
+    if (formData.template.product_title && formData.template.product_title.trim()) {
+      const productTitleLengthError = validateIsLength(formData.template.product_title, {
+        validatorOptions: { max: 500 },
+        customMessage: 'Product title must be less than 500 characters'
+      });
+      if (productTitleLengthError) {
+        newErrors['template.product_title'] = typeof productTitleLengthError === 'object' ? productTitleLengthError.message : productTitleLengthError;
+      }
+    }
+
+    if (formData.template.product_message && formData.template.product_message.trim()) {
+      const productMessageLengthError = validateIsLength(formData.template.product_message, {
+        validatorOptions: { max: 1000 },
+        customMessage: 'Product message must be less than 1000 characters'
+      });
+      if (productMessageLengthError) {
+        newErrors['template.product_message'] = typeof productMessageLengthError === 'object' ? productMessageLengthError.message : productMessageLengthError;
+      }
+    }
+
     if (formData.template.form_title && formData.template.form_title.trim()) {
       const formTitleLengthError = validateIsLength(formData.template.form_title, {
         validatorOptions: { max: 500 },
@@ -733,6 +754,8 @@ export default function CreateClaimFreeProductTemplate({
         loading_message: data.template.loading_message ? sanitizeTrim(stripHtmlTags(data.template.loading_message)) : '',
         completed_title: data.template.completed_title ? sanitizeTrim(stripHtmlTags(data.template.completed_title)) : '',
         completed_message: data.template.completed_message ? sanitizeTrim(stripHtmlTags(data.template.completed_message)) : '',
+        product_title: data.template.product_title ? sanitizeTrim(stripHtmlTags(data.template.product_title)) : '',
+        product_message: data.template.product_message ? sanitizeTrim(stripHtmlTags(data.template.product_message)) : '',
         expired_title: data.template.expired_title ? sanitizeTrim(stripHtmlTags(data.template.expired_title)) : '',
         expired_message: data.template.expired_message ? sanitizeTrim(stripHtmlTags(data.template.expired_message)) : '',
         form_title: data.template.form_title ? sanitizeTrim(stripHtmlTags(data.template.form_title)) : '',

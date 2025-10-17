@@ -427,7 +427,7 @@ class ProductClaimController extends Controller
                 'privacy_notice' => $validated['privacy_notice'] ?? null,
                 'status' => (isset($validated['testing']) && $validated['testing']) ? 'testing' : 'pending',
             ];
-
+            
             // If template_id provided, fill from template
             $templateFields = [
                 'client_ref', 'client_name', 'client_image', 'client_url', 'contact_url', 'privacy_url',
@@ -446,7 +446,7 @@ class ProductClaimController extends Controller
                 $tempImagePath = $clientImageFile->store('temp/previews/' . date('Y/m/d'), 'r2-public');
                 $customerData['client_image'] = basename($tempImagePath);
                 // Store the temporary path for preview purposes, without the base filename
-                $customerData['client_image_path'] = $tempImagePath;
+                $customerData['client_image_path'] = dirname($tempImagePath) . '/';
             }else{
                 $customerData['client_image'] = basename($customerData['client_image'] ?? '');
             }
@@ -457,7 +457,7 @@ class ProductClaimController extends Controller
                 $tempImagePath = $productImageFile->store('temp/previews/' . date('Y/m/d'), 'r2-public');
                 $customerData['product_image'] = basename($tempImagePath);
                 // Store the temporary path for preview purposes, without the base filename
-                $customerData['product_image_path'] = $tempImagePath;
+                $customerData['product_image_path'] = dirname($tempImagePath) . '/';
             }
 
             // Process communication channels - only include enabled ones
