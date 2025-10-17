@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
-import { XMarkIcon, ClipboardIcon, CheckIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, ClipboardIcon, CheckIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import QRCode from 'qrcode';
+import { ExclamationCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/20/solid';
 
 export default function PreviewLinkDialog({ 
   isOpen, 
@@ -14,8 +15,9 @@ export default function PreviewLinkDialog({
   const [previewData, setPreviewData] = useState(null);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [copySuccess, setCopySuccess] = useState(false);
+  const [hasAttemptedGeneration, setHasAttemptedGeneration] = useState(false);
 
-  const handleGeneratePreview = async () => {
+  const handleGeneratePreview = useCallback(async () => {
     if (!templateData) return;
 
     setIsGenerating(true);
@@ -41,7 +43,7 @@ export default function PreviewLinkDialog({
     } finally {
       setIsGenerating(false);
     }
-  };
+  }, [templateData, onGeneratePreview]);
 
   const copyToClipboard = async (text) => {
     try {
@@ -57,19 +59,23 @@ export default function PreviewLinkDialog({
     window.open(url, '_blank');
   };
 
-  // Generate preview when dialog opens
+  // Generate preview when dialog opens (only once per open)
   useEffect(() => {
-    if (isOpen && templateData && !previewData) {
+    if (isOpen && templateData && !previewData && !hasAttemptedGeneration && !isGenerating) {
+      setHasAttemptedGeneration(true);
       handleGeneratePreview();
     }
-  }, [isOpen, templateData]);
+  }, [isOpen, templateData, previewData, hasAttemptedGeneration, isGenerating, handleGeneratePreview]);
 
   // Reset state when dialog closes
   useEffect(() => {
     if (!isOpen) {
-      setPreviewData(null);
-      setQrCodeUrl('');
-      setCopySuccess(false);
+      setTimeout(() => {
+        setPreviewData(null);
+        setQrCodeUrl('');
+        setCopySuccess(false);
+        setHasAttemptedGeneration(false);
+      }, 300);
     }
   }, [isOpen]);
 
@@ -120,7 +126,7 @@ export default function PreviewLinkDialog({
                 {/* Loading State */}
                 {isGenerating && (
                   <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-600 mx-auto mb-4"></div>
+                    <ArrowPathIcon className="h-8 w-8 text-gray-400 dark:text-gray-500 mx-auto animate-spin mb-4" />
                     <p className="text-gray-600 dark:text-gray-400">Generating preview link...</p>
                   </div>
                 )}
@@ -130,11 +136,11 @@ export default function PreviewLinkDialog({
                   <div className="space-y-6">
                     {/* QR Code */}
                     <div className="text-center">
-                      <div className="bg-white p-4 rounded-lg inline-block shadow-sm">
+                      <div className="bg-white p-4 rounded-lg inline-block">
                         <img 
                           src={qrCodeUrl} 
                           alt="QR Code for preview link" 
-                          className="w-48 h-48 mx-auto"
+                          className="w-52 h-52 mx-auto"
                         />
                       </div>
                       <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
@@ -152,7 +158,7 @@ export default function PreviewLinkDialog({
                           type="text"
                           readOnly
                           value={previewData.url}
-                          className="flex-1 block w-full rounded-none rounded-l-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                          className="flex-1 block w-full rounded-none rounded-l-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-gray-900 dark:text-white text-sm px-2 border"
                         />
                         <button
                           type="button"
@@ -168,40 +174,12 @@ export default function PreviewLinkDialog({
                       </div>
                     </div>
 
-                    {/* Short URL */}
-                    {previewData.short_url && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Short URL
-                        </label>
-                        <div className="flex rounded-md shadow-sm">
-                          <input
-                            type="text"
-                            readOnly
-                            value={previewData.short_url}
-                            className="flex-1 block w-full rounded-none rounded-l-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(previewData.short_url)}
-                            className="relative -ml-px inline-flex items-center space-x-2 rounded-r-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600"
-                          >
-                            {copySuccess ? (
-                              <CheckIcon className="h-4 w-4 text-green-500" />
-                            ) : (
-                              <ClipboardIcon className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
                     {/* Expiry Info */}
                     {previewData.expires_at && (
                       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
                         <p className="text-sm text-blue-800 dark:text-blue-300">
                           <strong>Testing Mode:</strong> This preview link expires at{' '}
-                          {new Date(previewData.expires_at).toLocaleString()}
+                          {new Date(previewData.expires_at).toLocaleString('en-GB')}
                         </p>
                       </div>
                     )}
@@ -228,10 +206,10 @@ export default function PreviewLinkDialog({
 
                 {/* Error State */}
                 {!isGenerating && !previewData && (
-                  <div className="text-center py-8">
-                    <p className="text-red-600 dark:text-red-400 mb-4">
-                      Failed to generate preview link
-                    </p>
+                  <div className="text-center py-8 flex flex-col items-center gap-y-4">
+                    <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-600`}>
+                      <ExclamationTriangleIcon className={`h-7 w-7 text-white`} aria-hidden="true" />
+                    </div>
                     <button
                       type="button"
                       onClick={handleGeneratePreview}

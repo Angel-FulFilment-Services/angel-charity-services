@@ -80,30 +80,74 @@ export default function CreateClaimFreeProductTemplate({
   const generatePreview = async (templateData) => {
     setPreviewing(true);
     try {
-      // Fetch internal token from server-side endpoint
-      const tokenResp = await fetch('/api/internal/token');
-      if (!tokenResp.ok) throw new Error('Failed to fetch internal token');
-      const tokenJson = await tokenResp.json();
-      const token = tokenJson.token;
+      // Sanitize the form data before processing
+      const sanitizedData = sanitizeFormData(templateData);
+      
+      // Create FormData for file uploads (similar to save function)
+      const submitData = new FormData();
 
-      // Call preview endpoint with token in Authorization header
-      const resp = await fetch('/api/internal/template/preview', {
+      // Add basic preview data
+      submitData.append('GUID', crypto.randomUUID());
+      submitData.append('title', 'Mr');
+      submitData.append('surname', 'Preview');
+      submitData.append('testing', 'true');
+
+      // Add prerequisites data (exclude image URLs when files are being uploaded)
+      Object.keys(sanitizedData.prerequisites).forEach(key => {
+        const value = sanitizedData.prerequisites[key];
+        if (key !== 'client_image_file' && key !== 'product_image_file') {
+          // Skip image URLs if we have file uploads for them
+          if (key === 'client_image' && formData.prerequisites.client_image_file instanceof File) {
+            return;
+          }
+          if (key === 'product_image' && formData.prerequisites.product_image_file instanceof File) {
+            return;
+          }
+          submitData.append(key, value || '');
+        }
+      });
+
+      // Add template data
+      Object.keys(sanitizedData.template).forEach(key => {
+        const value = sanitizedData.template[key];
+        if (key !== 'communication_channels') {
+          submitData.append(key, value || '');
+        }
+      });
+
+      // Add communication preferences with proper boolean conversion
+      if (sanitizedData.template.communication_channels) {
+        Object.keys(sanitizedData.template.communication_channels).forEach(type => {
+          const pref = sanitizedData.template.communication_channels[type];
+          Object.keys(pref).forEach(field => {
+            let value = pref[field];
+            // Convert boolean values to strings that Laravel can understand
+            if (typeof value === 'boolean') {
+              value = value ? '1' : '0';
+            }
+            submitData.append(`communication_channels[${type}][${field}]`, value);
+          });
+        });
+      }
+
+      // Add file uploads if they exist (check for actual File objects, not empty strings)
+      if (formData.prerequisites.client_image_file && formData.prerequisites.client_image_file instanceof File) {
+        submitData.append('client_image_file', formData.prerequisites.client_image_file);
+      }
+      if (formData.prerequisites.product_image_file && formData.prerequisites.product_image_file instanceof File) {
+        submitData.append('product_image_file', formData.prerequisites.product_image_file);
+      }
+
+      submitData.append('testing', 1);
+
+      // Call preview endpoint with FormData
+      const resp = await fetch('/api/template/preview', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+          // Don't set Content-Type for FormData - browser will set it with boundary
         },
-        body: JSON.stringify({
-          GUID: `preview-${Date.now()}`,
-          title: 'Mr',
-          surname: 'Preview',
-          testing: true,
-          template_id: templateData.template_id || null,
-          client_ref: templateData.client_ref || '',
-          client_name: templateData.client_name || '',
-          product_name: templateData.product_name || '',
-          theme_colour: templateData.theme_colour || '#008DA9',
-        })
+        body: submitData
       });
 
       if (!resp.ok) {
@@ -941,13 +985,7 @@ export default function CreateClaimFreeProductTemplate({
       <PreviewLinkDialog
         isOpen={isPreviewOpen}
         onClose={() => setIsPreviewOpen(false)}
-        templateData={{
-          template_id: formData.template?.template_id || null,
-          client_ref: formData.prerequisites?.client_ref || '',
-          client_name: formData.prerequisites?.client_name || '',
-          product_name: formData.prerequisites?.product_name || '',
-          theme_colour: formData.template?.theme_colour || themeColour
-        }}
+        templateData={formData}
         onGeneratePreview={generatePreview}
       />
       

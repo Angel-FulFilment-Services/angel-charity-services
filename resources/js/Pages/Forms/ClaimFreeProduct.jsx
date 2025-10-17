@@ -57,7 +57,10 @@ export default function ProductCapture({
   privacy_notice,
   theme_colour, // New prop for custom theme color (hex or rgb)
   communication_channels = [], // Array of communication channel objects
-  status
+  status,
+  // Temporary image paths for preview fallback
+  product_image_path,
+  client_image_path
 }) {
 
   const themeColour = theme_colour || '#008DA9'; // Default to blue if not provided
@@ -179,23 +182,11 @@ export default function ProductCapture({
   // State to track if product image loaded successfully
   const [productImageLoaded, setProductImageLoaded] = useState(false);
   const [productImageError, setProductImageError] = useState(false);
+  const [clientImageLoaded, setClientImageLoaded] = useState(false);
+  const [clientImageError, setClientImageError] = useState(false);
 
   // Default values when props are null
   const r2bucketURL = 'https://cdn.angelfs.co.uk/clients/images/';
-  const defaultClientImage = 'afs-logo.png';
-  const defaultProductImage = '';
-  const defaultClientName = 'Angel Charity Services';
-  const defaultProductName = 'Pin Badge';
-  const defaultProductTitle = 'Claim Your Free {{product_name}}';
-  const defaultProductMessage = 'Complete this form to claim your free {{product_name}}. We\'ll use your details to arrange delivery and keep you updated.';
-  const defaultClientUrl = 'https://www.helloangel.co.uk/';
-  const defaultContactURL = 'https://www.helloangel.co.uk/contact-us';
-  const defaultPrivacyURL = 'https://www.helloangel.co.uk/privacypolicy';
-  const defaultLoadingTitle = 'Preparing Your Free {{product_name}}';
-  const defaultLoadingMessage = 'Setting up your personalized claim form...';
-  const defaultCompletedTitle = 'Thank You!';
-  const defaultCompletedMessage = 'Your free {{product_name}} claim has been submitted successfully. We\'ll process your request and arrange delivery soon.';
-  const defaultPrivacyNotice = 'By claiming your free product, you agree to our terms of service and privacy policy. Your information will be used solely for product delivery and customer support. We will never sell or share your personal information with third parties without your consent.';  
 
   // Template replacement function
   const replaceTemplateVariables = (template, variables) => {
@@ -210,15 +201,17 @@ export default function ProductCapture({
   // Use provided values or fall back to defaults
   const displayTitle = title;
   const displaySurname = surname;
-  const displayImage = r2bucketURL + 'logos/' + (client_image || defaultClientImage);
-  const productImage = r2bucketURL + 'products/' + (product_image || defaultProductImage);
+  
+  // Use temporary paths if available, otherwise use standard paths
+  const displayImage = client_image_path || (client_image ? r2bucketURL + 'logos/' + client_image : null);
+  const productImage = product_image_path || (product_image ? r2bucketURL + 'products/' + product_image : null);
 
-  const displayClientName = client_name || defaultClientName;
-  const displayProductName = product_name || defaultProductName;
-  const clientUrl = client_url || defaultClientUrl;
-  const contactUrl = contact_url || defaultContactURL;
-  const privacyUrl = privacy_url || defaultPrivacyURL;
-  const displayNGN = ngn || '';
+  const displayClientName = client_name;
+  const displayProductName = product_name;
+  const clientUrl = client_url;
+  const contactUrl = contact_url;
+  const privacyUrl = privacy_url;
+  const displayNGN = ngn;
 
   // Template variables for replacements
   const templateVariables = {
@@ -229,13 +222,13 @@ export default function ProductCapture({
   };
 
   // Apply template replacements
-  const displayLoadingTitle = replaceTemplateVariables(loading_title || defaultLoadingTitle, templateVariables);
-  const displayLoadingMessage = replaceTemplateVariables(loading_message || defaultLoadingMessage, templateVariables);
-  const displayCompletedTitle = replaceTemplateVariables(completed_title || defaultCompletedTitle, templateVariables);
-  const displayCompletedMessage = replaceTemplateVariables(completed_message || defaultCompletedMessage, templateVariables);
-  const displayFormTitle = replaceTemplateVariables(product_title || defaultProductTitle, templateVariables);
-  const displayFormMessage = replaceTemplateVariables(product_message || defaultProductMessage, templateVariables);
-  const displayPrivacyNotice = replaceTemplateVariables(privacy_notice || defaultPrivacyNotice, { product_name: displayProductName, client_name: displayClientName });
+  const displayLoadingTitle = replaceTemplateVariables(loading_title, templateVariables);
+  const displayLoadingMessage = replaceTemplateVariables(loading_message, templateVariables);
+  const displayCompletedTitle = replaceTemplateVariables(completed_title, templateVariables);
+  const displayCompletedMessage = replaceTemplateVariables(completed_message, templateVariables);
+  const displayFormTitle = replaceTemplateVariables(product_title, templateVariables);
+  const displayFormMessage = replaceTemplateVariables(product_message, templateVariables);
+  const displayPrivacyNotice = replaceTemplateVariables(privacy_notice, { product_name: displayProductName, client_name: displayClientName });
 
   // Handle product image loading
   const handleProductImageLoad = () => {
@@ -243,13 +236,37 @@ export default function ProductCapture({
     setProductImageError(false);
   };
 
-  const handleProductImageError = () => {
+  const handleProductImageError = (e) => {
+    // If we have a temp path and haven't tried it yet, try the temp path
+    if (product_image_path && e.target.src !== product_image_path) {
+      e.target.src = product_image_path;
+      return;
+    }
+    // If temp path also failed or we don't have one, mark as error
     setProductImageLoaded(false);
     setProductImageError(true);
   };
 
+  const handleClientImageLoad = () => {
+    setClientImageLoaded(true);
+    setClientImageError(false);
+  };
+
+  const handleClientImageError = (e) => {
+    // If we have a temp path and haven't tried it yet, try the temp path
+    if (client_image_path && e.target.src !== client_image_path) {
+      e.target.src = client_image_path;
+      return;
+    }
+    // If temp path also failed or we don't have one, mark as error
+    setClientImageLoaded(false);
+    setClientImageError(true);
+  };
+
   // Check if we should show the product image
   const shouldShowProductImage = productImage && !productImageError;
+  const shouldShowClientImage = displayClientName && !clientImageError;
+
   // Title options for the dropdown
   const titleOptions = [
     { id: 'mr', value: 'Mr', displayValue: 'Mr' },
@@ -637,11 +654,15 @@ export default function ProductCapture({
 
           {/* Logo at bottom */}
           <div className="mt-8">
-            <img
-              alt={displayClientName}
-              src={displayImage}
-              className="mx-auto h-12 w-auto opacity-60"
-            />
+            {shouldShowClientImage && (
+              <img
+                alt={displayClientName}
+                src={displayImage}
+                onLoad={handleClientImageLoad}
+                onError={handleClientImageError}
+                className="mx-auto h-12 w-auto opacity-60"
+              />
+            )}
           </div>
         </div>
       </div>
@@ -687,11 +708,13 @@ export default function ProductCapture({
           {/* Logo at bottom */}
           <div className={`mt-12 ${isCompleted ? 'animate-fadeInUp' : ''}`}
                style={{ animationDelay: isCompleted ? '0.3s' : '0s' }}>
-            <img
-              alt={displayClientName}
-              src={displayImage}
-              className="mx-auto h-12 w-auto opacity-60"
-            />
+            {shouldShowClientImage && (
+              <img
+                alt={displayClientName}
+                src={displayImage}
+                className="mx-auto h-12 w-auto opacity-60"
+              />
+            )}
           </div>
         </div>
       </div>
@@ -713,11 +736,13 @@ export default function ProductCapture({
         }}>
           <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
             <div className="text-center">
-              <img
-                alt={displayClientName}
-                src={displayImage}
-                className="mx-auto h-16 w-auto mb-2"
-              />
+              {shouldShowClientImage && (
+                <img
+                  alt={displayClientName}
+                  src={displayImage}
+                  className="mx-auto h-16 w-auto mb-2"
+                />
+              )}
             </div>
           </div>
         </header>
@@ -1037,11 +1062,13 @@ export default function ProductCapture({
           <div className="mx-auto max-w-7xl px-6 py-12 lg:px-8">
             <div className="text-center">
               <div className="flex justify-center items-center mb-4">
-                <img
-                  alt={displayClientName}
-                  src={displayImage}
-                  className="h-8 w-auto"
-                />
+                {shouldShowClientImage && (
+                  <img
+                    alt={displayClientName}
+                    src={displayImage}
+                    className="h-8 w-auto"
+                  />
+                )}
               </div>
               <p className="text-sm leading-6 text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
                 {displayPrivacyNotice}

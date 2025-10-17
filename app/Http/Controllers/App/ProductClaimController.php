@@ -404,8 +404,11 @@ class ProductClaimController extends Controller
                 'communication_channels.*.channel' => 'required_with:communication_channels|string|max:50',
                 'communication_channels.*.label' => 'required_with:communication_channels|string|max:255',
                 'communication_channels.*.type' => 'nullable|string|in:opt-in,opt-out',
+                'communication_channels.*.enabled' => 'nullable|boolean',
                 'privacy_notice' => 'nullable|string|max:2000',
-                'testing' => 'nullable|boolean'
+                'testing' => 'nullable|boolean',
+                'product_image_file' => 'nullable|file|mimes:jpeg,jpg,png,gif,webp|max:5120',
+                'client_image_file' => 'nullable|file|mimes:jpeg,jpg,png,gif,webp|max:2048'
             ]);
 
             // If GUID already exists, return conflict
@@ -419,41 +422,59 @@ class ProductClaimController extends Controller
                 'template_id' => $validated['template_id'] ?? null,
                 'title' => $validated['title'],
                 'surname' => $validated['surname'],
-                'communication_channels' => $validated['communication_channels'] ?? null,
                 'privacy_notice' => $validated['privacy_notice'] ?? null,
                 'status' => (isset($validated['testing']) && $validated['testing']) ? 'testing' : 'pending',
             ];
 
             // If template_id provided, fill from template
-            if (!empty($validated['template_id'])) {
-                $template = Template::find($validated['template_id']);
-                if ($template) {
-                    $templateFields = [
-                        'client_ref', 'client_name', 'client_image', 'client_url', 'contact_url', 'privacy_url',
-                        'theme_colour', 'product_title', 'product_message', 'product_name', 'product_image',
-                        'loading_title', 'loading_message', 'completed_title', 'completed_message', 'expired_title', 'expired_message'
-                    ];
-
-                    foreach ($templateFields as $field) {
-                        if (isset($validated[$field]) && !is_null($validated[$field])) {
-                            $customerData[$field] = $validated[$field];
-                        } else {
-                            $customerData[$field] = $template->{$field};
-                        }
-                    }
+            $templateFields = [
+                'client_ref', 'client_name', 'client_image', 'client_url', 'contact_url', 'privacy_url',
+                'theme_colour', 'product_title', 'product_message', 'product_name', 'product_image',
+                'loading_title', 'loading_message', 'completed_title', 'completed_message', 'expired_title', 'expired_message'
+            ];
+            foreach ($templateFields as $field) {
+                if (isset($validated[$field]) && !is_null($validated[$field])) {
+                    $customerData[$field] = $validated[$field];
                 }
-            } else {
-                $templateFields = [
-                    'client_ref', 'client_name', 'client_image', 'client_url', 'contact_url', 'privacy_url',
-                    'theme_colour', 'product_title', 'product_message', 'product_name', 'product_image',
-                    'loading_title', 'loading_message', 'completed_title', 'completed_message', 'expired_title', 'expired_message'
-                ];
-                foreach ($templateFields as $field) {
-                    if (isset($validated[$field]) && !is_null($validated[$field])) {
-                        $customerData[$field] = $validated[$field];
+            }
+
+            if ($request->hasFile('client_image_file')) {
+                $clientImageFile = $request->file('client_image_file');
+
+                $tempImagePath = $clientImageFile->store('temp/previews/' . date('Y/m/d'), 'r2-public');
+                $customerData['client_image'] = basename($tempImagePath);
+                // Store the temporary path for preview purposes, without the base filename
+                $customerData['client_image_path'] = $tempImagePath;
+            }else{
+                $customerData['client_image'] = basename($customerData['client_image'] ?? '');
+            }
+
+            if ($request->hasFile('product_image_file')) {
+                $productImageFile = $request->file('product_image_file');
+
+                $tempImagePath = $productImageFile->store('temp/previews/' . date('Y/m/d'), 'r2-public');
+                $customerData['product_image'] = basename($tempImagePath);
+                // Store the temporary path for preview purposes, without the base filename
+                $customerData['product_image_path'] = $tempImagePath;
+            }
+
+            // Process communication channels - only include enabled ones
+            $communicationChannels = [];
+            if (isset($validated['communication_channels'])) {
+                foreach ($validated['communication_channels'] as $channel => $preferences) {
+                    // Convert string '1'/'0' to boolean for enabled check
+                    $enabled = is_string($preferences['enabled']) ? $preferences['enabled'] === '1' : (bool)$preferences['enabled'];
+                    
+                    if ($enabled) {
+                        $communicationChannels[] = [
+                            'channel' => $preferences['channel'],
+                            'label' => $preferences['label'],
+                            'type' => $preferences['type']
+                        ];
                     }
                 }
             }
+            $customerData['communication_channels'] = $communicationChannels;
 
             // Create temporary customer record
             $customer = Customer::create($customerData);
@@ -461,19 +482,20 @@ class ProductClaimController extends Controller
             // Generate signed URL (valid for 2 hours) and short URL
             $expiryTime = now()->addHours(2);
             $url = URL::temporarySignedRoute('product.claim', $expiryTime, ['guid' => $customer->guid]);
-            $shortUrl = ShortURL::destinationUrl($url)->secure()->trackVisits(false)->deactivateAt($expiryTime)->make()->default_short_url;
 
             return response()->json([
                 'status' => 'success',
                 'data' => [
                     'url' => $url,
-                    'short_url' => $shortUrl,
                     'expires_at' => $expiryTime->toISOString(),
                     'customer_id' => $customer->id
                 ]
             ], 201);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
+
+            Log::error('Validation failed for preview template', ['errors' => $e->errors(), 'request' => $request->all()]);
+
             return response()->json(['status' => 'error', 'message' => 'Validation failed', 'errors' => $e->errors()], 422);
         } catch (\Exception $e) {
             Log::error('Failed to generate preview template', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString(), 'request' => $request->all()]);
@@ -718,25 +740,25 @@ class ProductClaimController extends Controller
             'clients' => $clients,
             'store_url' => $storeSignedUrl,
             'communication_channels' => [
-                [
+                'post' => [
                     'enabled' => true,
                     'channel' => 'post',
                     'label' => 'I do not want to receive updates by post',
                     'type' => 'opt-out'
                 ],
-                [
+                'phone' => [
                     'enabled' => true,
                     'channel' => 'phone',
                     'label' => 'I do not want to receive updates by telephone',
                     'type' => 'opt-out'
                 ],
-                [
+                'email' => [
                     'enabled' => true,
                     'channel' => 'email',
                     'label' => 'I would like to receive email updates',
                     'type' => 'opt-in'
                 ],
-                [
+                'sms' => [
                     'enabled' => true,
                     'channel' => 'sms',
                     'label' => 'I would like to receive SMS messages', 

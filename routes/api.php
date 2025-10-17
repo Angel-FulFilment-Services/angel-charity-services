@@ -43,19 +43,8 @@ Route::post('template/generate-template-url', [ProductClaimController::class, 'g
     ->middleware('throttle:2000,1')
     ->middleware('auth:api');
 
-// Internal routes protected by a server-side token
-Route::prefix('internal')->middleware(['api.token'])->group(function () {
-    // Generate a preview link (testing mode)
-    Route::post('template/preview', [ProductClaimController::class, 'previewTemplate'])->name('template.preview')
-        ->withoutMiddleware('throttle:api')
-        ->middleware('throttle:2000,1');
-    
-    // Return internal API token (for server-side use only)
-    Route::get('token', function () {
-        $token = config('api_auth.internal_api_token');
-        if ($token) return response()->json(['token' => $token]);
-        $path = config('api_auth.token_file_path');
-        if (file_exists($path)) return response()->json(['token' => trim(file_get_contents($path))]);
-        return response()->json(['token' => null], 404);
-    })->name('internal.token');
-});
+
+// Generate a preview link (testing mode)
+Route::post('template/preview', [ProductClaimController::class, 'previewTemplate'])->name('template.preview')
+    ->withoutMiddleware('throttle:api')
+    ->middleware('throttle:2000,1');
