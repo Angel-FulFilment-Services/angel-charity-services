@@ -12,6 +12,7 @@ use AshAllenDesign\ShortURL\Facades\ShortURL;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Http;
 
 class ProductClaimController extends Controller
 {
@@ -548,20 +549,47 @@ class ProductClaimController extends Controller
             now()->addHours(4)
         );
 
-        $clients = DB::connection('halo_config')->table('client_tables')
-        ->select('unq_id as id', 'clientref as client_ref', 'clientname as client_name')
-        ->where(function ($query) {
-            $query->whereNull('active')
-                  ->orWhere('active','=', '');
-        })
-        ->get()
-        ->map(function ($client) {
-            return [
-                'id' => $client->id,
-                'value' => $client->client_name,
-                'client_ref' => $client->client_ref
-            ];
-        });
+        // Fetch clients from external API
+        try {
+            $clientsApiUrl = config('app.clients_api_url', 'https://pulse.angelfs.co.uk/api/system/clients');
+            $clientsApiToken = config('app.clients_api_token');
+            
+            $apiResponse = Http::timeout(10)
+                ->withToken($clientsApiToken)
+                ->get($clientsApiUrl);
+            
+            if ($apiResponse->successful()) {
+                $clients = $apiResponse->json('data', []);
+                
+                // Validate and format the response to ensure it matches expected structure
+                $clients = collect($clients)->map(function ($client) {
+                    return [
+                        'id' => $client['id'] ?? null,
+                        'value' => $client['client_name'] ?? $client['value'] ?? '',
+                        'client_ref' => $client['client_ref'] ?? ''
+                    ];
+                })->filter(function ($client) {
+                    // Filter out any clients with missing required data
+                    return !empty($client['id']) && !empty($client['value']);
+                })->sortBy('value')->values()->toArray();
+            } else {
+                Log::warning('Failed to fetch clients from API', [
+                    'status' => $apiResponse->status(),
+                    'response' => $apiResponse->body()
+                ]);
+                
+                // Fallback to empty array or default clients
+                $clients = [];
+            }
+        } catch (\Exception $e) {
+            Log::error('Error calling clients API', [
+                'error' => $e->getMessage(),
+                'url' => $clientsApiUrl ?? 'not configured'
+            ]);
+            
+            // Fallback to empty array
+            $clients = [];
+        }
 
         // Sample template data - this will eventually come from database
         $templateData = [

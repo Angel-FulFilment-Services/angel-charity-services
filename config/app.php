@@ -196,4 +196,6 @@ return [
     */
 
     'claim_url_expiry_minutes' => env('CLAIM_URL_EXPIRY_MINUTES', 2880),
+    'clients_api_url' => env('CLIENTS_API_URL', 'https://pulse.angelfs.co.uk/api/system/clients'),
+    'clients_api_token' => env('CLIENTS_API_TOKEN'),
 ];
