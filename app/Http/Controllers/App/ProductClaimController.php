@@ -98,7 +98,9 @@ class ProductClaimController extends Controller
                 'communication_channels' => $customer->communication_channels,
                 'privacy_notice' => $customer->privacy_notice,
                 'status' => $customer->status,
-                'ngn' => $customer->ngn
+                'ngn' => $customer->ngn,
+                'client_image_path' => $customer->client_image_path,
+                'product_image_path' => $customer->product_image_path,
             ], $customer->getTemplateConfig());
 
             return Inertia::render('Forms/ClaimFreeProduct', $claimData);
