@@ -593,11 +593,6 @@ class ProductClaimController extends Controller
 
         // Sample template data - this will eventually come from database
         $templateData = [
-            'template_name' => 'Sample Template',
-            'title' => 'Mr',
-            'surname' => 'Smith',
-            'client_image' => 'afs-logo.png',
-            'client_name' => 'Angel Charity Services',
             'loading_title' => 'Preparing Your Free {{product_name}}!',
             'loading_message' => 'Setting up your personalized claim form...',
             'completed_title' => 'Thank You!',
@@ -606,32 +601,10 @@ class ProductClaimController extends Controller
             'expired_message' => 'This {{product_name}} claim link has expired and is no longer valid.',
             'product_title' => 'Claim Your Free {{product_name}}',
             'product_message' => 'Complete this form to claim your free {{product_name}}. We\'ll use your details to arrange delivery and keep you updated.',
-            'product_name' => 'Pin Badge',
-            'product_image' => '',
-            'client_url' => 'https://www.helloangel.co.uk/',
-            'contact_url' => 'https://www.helloangel.co.uk/contact-us',
-            'privacy_url' => 'https://www.helloangel.co.uk/privacypolicy',
             'privacy_notice' => 'By claiming your free product, you agree to our terms of service and privacy policy. Your information will be used solely for product delivery and customer support. We will never sell or share your personal information with third parties without your consent.',
             'theme_colour' => '#008DA9',
             'clients' => $clients,
             'store_url' => $storeSignedUrl,
-            'communication_channels' => [
-                [
-                    'channel' => 'email',
-                    'label' => 'Email updates',
-                    'type' => 'opt-in'
-                ],
-                [
-                    'channel' => 'sms',
-                    'label' => 'SMS notifications', 
-                    'type' => 'opt-out'
-                ],
-                [
-                    'channel' => 'post',
-                    'label' => 'Postal mail',
-                    'type' => 'opt-in'
-                ]
-            ]
         ];
 
         return Inertia::render('Forms/CreateClaimFreeProductTemplate', $templateData);

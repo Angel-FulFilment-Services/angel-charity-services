@@ -120,8 +120,10 @@ export default function CreateClaimFreeProductTemplate({
   useEffect(() => {
     if (themeColour) {
       const colourScale = generateColorScale(themeColour);
-
       const colours = Object.values(colourScale).map(c => [c.r, c.g, c.b]);
+
+      const colourScaleComplete = generateColorScale('#28a745'); // Green for success
+      const coloursComplete = Object.values(colourScaleComplete).map(c => [c.r, c.g, c.b]);
 
       // Manually set the target colours for the animation.
       const targetColours = Object.values([
@@ -136,13 +138,13 @@ export default function CreateClaimFreeProductTemplate({
       setAnimationDataLoading(replaceAnimationColors(getColors(animationLoading), targetColours, animationLoading));
 
       const targetColoursSuccess = Object.values([
-        colours[1],
-        colours[5],
-        colours[3],
-        colours[6],
-        colours[7],
-        colours[3],
-        colours[6],
+        coloursComplete[1],
+        coloursComplete[5],
+        coloursComplete[3],
+        coloursComplete[6],
+        coloursComplete[7],
+        coloursComplete[3],
+        coloursComplete[6],
       ]);
 
       setAnimationDataSuccess(replaceAnimationColors(getColors(animationSuccess), targetColoursSuccess, animationSuccess));
