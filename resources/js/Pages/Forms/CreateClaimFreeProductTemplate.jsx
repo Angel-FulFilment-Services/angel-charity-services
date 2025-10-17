@@ -45,6 +45,7 @@ import {
   ClockIcon
 } from '@heroicons/react/24/outline';
 import { ring } from 'ldrs';
+import PreviewLinkDialog from '../../Components/Dialogs/PreviewLinkDialog';
 
 
 export default function CreateClaimFreeProductTemplate({ 
@@ -60,6 +61,7 @@ export default function CreateClaimFreeProductTemplate({
   product_message,
   privacy_notice,
   theme_colour,
+  communication_channels,
 }) {
 
   // Make theme color dynamic and editable
@@ -69,6 +71,54 @@ export default function CreateClaimFreeProductTemplate({
   const handleThemeColourChange = (newColour) => {
     setThemeColour(newColour);
     handleTemplateChange('theme_colour', newColour);
+  };
+
+  // Preview dialog state
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+
+  const generatePreview = async (templateData) => {
+    setPreviewing(true);
+    try {
+      // Fetch internal token from server-side endpoint
+      const tokenResp = await fetch('/api/internal/token');
+      if (!tokenResp.ok) throw new Error('Failed to fetch internal token');
+      const tokenJson = await tokenResp.json();
+      const token = tokenJson.token;
+
+      // Call preview endpoint with token in Authorization header
+      const resp = await fetch('/api/internal/template/preview', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          GUID: `preview-${Date.now()}`,
+          title: 'Mr',
+          surname: 'Preview',
+          testing: true,
+          template_id: templateData.template_id || null,
+          client_ref: templateData.client_ref || '',
+          client_name: templateData.client_name || '',
+          product_name: templateData.product_name || '',
+          theme_colour: templateData.theme_colour || '#008DA9',
+        })
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json();
+        return { success: false, message: err.message || 'Failed to generate preview' };
+      }
+
+      const json = await resp.json();
+      return { success: true, data: json.data };
+    } catch (e) {
+      console.error(e);
+      return { success: false, message: e.message };
+    } finally {
+      setPreviewing(false);
+    }
   };
 
   const [animationDataLoading, setAnimationDataLoading] = useState(null);
@@ -419,12 +469,7 @@ export default function CreateClaimFreeProductTemplate({
       form_message: product_message,
       privacy_notice: privacy_notice,
       theme_colour: theme_colour || '#008DA9',
-      communication_preferences: {
-        post: { enabled: true, value: 'post', label: 'I do not want to receive updates by post', type: 'opt-out' },
-        phone: { enabled: true, value: 'phone', label: 'I do not want to receive updates by telephone', type: 'opt-out' },
-        email: { enabled: true, value: 'email', label: 'I would like to receive email updates', type: 'opt-in' },
-        sms: { enabled: true, value: 'sms', label: 'I would like to receive SMS messages', type: 'opt-in' }
-      }
+      communication_channels: communication_channels
     }
   });
 
@@ -636,7 +681,7 @@ export default function CreateClaimFreeProductTemplate({
         form_message: data.template.form_message ? sanitizeTrim(stripHtmlTags(data.template.form_message)) : '',
         privacy_notice: data.template.privacy_notice ? sanitizeTrim(stripHtmlTags(data.template.privacy_notice)) : '',
         theme_colour: data.template.theme_colour ? sanitizeTrim(data.template.theme_colour) : '#008DA9',
-        communication_preferences: data.template.communication_preferences
+        communication_channels: data.template.communication_channels
       }
     };
   };
@@ -673,10 +718,10 @@ export default function CreateClaimFreeProductTemplate({
       ...prev,
       template: {
         ...prev.template,
-        communication_preferences: {
-          ...prev.template.communication_preferences,
+        communication_channels: {
+          ...prev.template.communication_channels,
           [type]: {
-            ...prev.template.communication_preferences[type],
+            ...prev.template.communication_channels[type],
             [field]: value
           }
         }
@@ -738,22 +783,22 @@ export default function CreateClaimFreeProductTemplate({
       // Add template data (don't filter out empty strings)
       Object.keys(sanitizedData.template).forEach(key => {
         const value = sanitizedData.template[key];
-        if (key !== 'communication_preferences') {
+        if (key !== 'communication_channels') {
           submitData.append(`template[${key}]`, value || '');
         }
       });
 
       // Add communication preferences with proper boolean conversion
-      if (sanitizedData.template.communication_preferences) {
-        Object.keys(sanitizedData.template.communication_preferences).forEach(type => {
-          const pref = sanitizedData.template.communication_preferences[type];
+      if (sanitizedData.template.communication_channels) {
+        Object.keys(sanitizedData.template.communication_channels).forEach(type => {
+          const pref = sanitizedData.template.communication_channels[type];
           Object.keys(pref).forEach(field => {
             let value = pref[field];
             // Convert boolean values to strings that Laravel can understand
             if (typeof value === 'boolean') {
               value = value ? '1' : '0';
             }
-            submitData.append(`template[communication_preferences][${type}][${field}]`, value);
+            submitData.append(`template[communication_channels][${type}][${field}]`, value);
           });
         });
       }
@@ -891,6 +936,20 @@ export default function CreateClaimFreeProductTemplate({
         </div>
         </div>
       )}
+
+      {/* Preview Link Dialog */}
+      <PreviewLinkDialog
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        templateData={{
+          template_id: formData.template?.template_id || null,
+          client_ref: formData.prerequisites?.client_ref || '',
+          client_name: formData.prerequisites?.client_name || '',
+          product_name: formData.prerequisites?.product_name || '',
+          theme_colour: formData.template?.theme_colour || themeColour
+        }}
+        onGeneratePreview={generatePreview}
+      />
       
       {/* Template Configuration Header */}
       {previewMode !== 'success' && (
@@ -987,7 +1046,7 @@ export default function CreateClaimFreeProductTemplate({
                   error={errors['template.theme_colour']}
                 />
               </div>
-              <button className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600">
+              <button onClick={() => setIsPreviewOpen(true)} className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600">
                 <EyeIcon className="h-4 w-4 mr-1.5" />
                 Preview Link
               </button>
@@ -1778,15 +1837,15 @@ export default function CreateClaimFreeProductTemplate({
               <div className="mt-4 flex flex-col gap-y-1">
                 {/* Post Preference */}
                 <div className="flex items-center gap-x-2">
-                  <div className="inline h-6 w-6 -mt-1 cursor-pointer" onClick={() => handleCommunicationPreferenceChange('post', 'enabled', !formData.template.communication_preferences.post.enabled)}>
-                    {formData.template.communication_preferences.post.enabled ? (
+                  <div className="inline h-6 w-6 -mt-1 cursor-pointer" onClick={() => handleCommunicationPreferenceChange('post', 'enabled', !formData.template.communication_channels.post.enabled)}>
+                    {formData.template.communication_channels.post.enabled ? (
                       <CheckCircleIcon className="h-6 w-6 text-green-500 inline" title='Enabled' />
                     ) : (
                       <XCircleIcon className="h-6 w-6 text-red-500 inline" title='Disabled' />
                     )}
                   </div>
-                    <button title={formData.template.communication_preferences.post.type === 'opt-in' ? 'Opt In' : 'Opt Out'} className="bg-gray-100 border-gray-300 hover:bg-gray-200 border px-2 rounded h-6 shrink-0 text-sm font-semibold min-w-[4.5rem]" onClick={() => handleCommunicationPreferenceChange('post', 'type', formData.template.communication_preferences.post.type === 'opt-in' ? 'opt-out' : 'opt-in')}>
-                      {formData.template.communication_preferences.post.type === 'opt-in' ? 
+                    <button title={formData.template.communication_channels.post.type === 'opt-in' ? 'Opt In' : 'Opt Out'} className="bg-gray-100 border-gray-300 hover:bg-gray-200 border px-2 rounded h-6 shrink-0 text-sm font-semibold min-w-[4.5rem]" onClick={() => handleCommunicationPreferenceChange('post', 'type', formData.template.communication_channels.post.type === 'opt-in' ? 'opt-out' : 'opt-in')}>
+                      {formData.template.communication_channels.post.type === 'opt-in' ? 
                         "Opt In"
                         :
                         "Opt Out"
@@ -1797,7 +1856,7 @@ export default function CreateClaimFreeProductTemplate({
                     className="text-sm leading-6 text-gray-900 dark:text-white flex w-full"
                   >
                     <InlineEditableText
-                      value={formData.template.communication_preferences.post.label}
+                      value={formData.template.communication_channels.post.label}
                       onChange={(value) => handleCommunicationPreferenceChange('post', 'label', value)}
                       className="text-sm leading-6 text-gray-900 dark:text-white pt-[0.09rem]"
                       placeholder="Enter post communication label..."
@@ -1808,15 +1867,15 @@ export default function CreateClaimFreeProductTemplate({
 
                 {/* Phone Preference */}
                 <div className="flex items-center shrink-0 gap-x-2">
-                  <div className="inline h-6 w-6 -mt-1 cursor-pointer" onClick={() => handleCommunicationPreferenceChange('phone', 'enabled', !formData.template.communication_preferences.phone.enabled)}>
-                    {formData.template.communication_preferences.phone.enabled ? (
+                  <div className="inline h-6 w-6 -mt-1 cursor-pointer" onClick={() => handleCommunicationPreferenceChange('phone', 'enabled', !formData.template.communication_channels.phone.enabled)}>
+                    {formData.template.communication_channels.phone.enabled ? (
                       <CheckCircleIcon className="h-6 w-6 text-green-500 inline" title='Enabled' />
                     ) : (
                       <XCircleIcon className="h-6 w-6 text-red-500 inline" title='Disabled' />
                     )}
                   </div>
-                  <button title={formData.template.communication_preferences.phone.type === 'opt-in' ? 'Opt In' : 'Opt Out'} className="bg-gray-100 border-gray-300 hover:bg-gray-200 border px-2 rounded h-6 shrink-0 text-sm font-semibold min-w-[4.5rem]" onClick={() => handleCommunicationPreferenceChange('phone', 'type', formData.template.communication_preferences.phone.type === 'opt-in' ? 'opt-out' : 'opt-in')}>
-                    {formData.template.communication_preferences.phone.type === 'opt-in' ? 
+                  <button title={formData.template.communication_channels.phone.type === 'opt-in' ? 'Opt In' : 'Opt Out'} className="bg-gray-100 border-gray-300 hover:bg-gray-200 border px-2 rounded h-6 shrink-0 text-sm font-semibold min-w-[4.5rem]" onClick={() => handleCommunicationPreferenceChange('phone', 'type', formData.template.communication_channels.phone.type === 'opt-in' ? 'opt-out' : 'opt-in')}>
+                    {formData.template.communication_channels.phone.type === 'opt-in' ? 
                         "Opt In"
                         :
                         "Opt Out"
@@ -1827,7 +1886,7 @@ export default function CreateClaimFreeProductTemplate({
                     className="text-sm leading-6 text-gray-900 dark:text-white flex w-full"
                   >
                     <InlineEditableText
-                      value={formData.template.communication_preferences.phone.label}
+                      value={formData.template.communication_channels.phone.label}
                       onChange={(value) => handleCommunicationPreferenceChange('phone', 'label', value)}
                       className="text-sm leading-6 text-gray-900 dark:text-white pt-[0.09rem]"
                       placeholder="Enter email communication label..."
@@ -1838,15 +1897,15 @@ export default function CreateClaimFreeProductTemplate({
 
                 {/* Email Preference */}
                 <div className="flex items-center shrink-0 gap-x-2">
-                  <div className="inline h-6 w-6 -mt-1 cursor-pointer" onClick={() => handleCommunicationPreferenceChange('email', 'enabled', !formData.template.communication_preferences.email.enabled)}>
-                    {formData.template.communication_preferences.email.enabled ? (
+                  <div className="inline h-6 w-6 -mt-1 cursor-pointer" onClick={() => handleCommunicationPreferenceChange('email', 'enabled', !formData.template.communication_channels.email.enabled)}>
+                    {formData.template.communication_channels.email.enabled ? (
                       <CheckCircleIcon className="h-6 w-6 text-green-500 inline" title='Enabled' />
                     ) : (
                       <XCircleIcon className="h-6 w-6 text-red-500 inline" title='Disabled' />
                     )}
                   </div>
-                  <button title={formData.template.communication_preferences.email.type === 'opt-in' ? 'Opt In' : 'Opt Out'} className="bg-gray-100 border-gray-300 hover:bg-gray-200 border px-2 rounded h-6 shrink-0 text-sm font-semibold min-w-[4.5rem]" onClick={() => handleCommunicationPreferenceChange('email', 'type', formData.template.communication_preferences.email.type === 'opt-in' ? 'opt-out' : 'opt-in')}>
-                    {formData.template.communication_preferences.email.type === 'opt-in' ? 
+                  <button title={formData.template.communication_channels.email.type === 'opt-in' ? 'Opt In' : 'Opt Out'} className="bg-gray-100 border-gray-300 hover:bg-gray-200 border px-2 rounded h-6 shrink-0 text-sm font-semibold min-w-[4.5rem]" onClick={() => handleCommunicationPreferenceChange('email', 'type', formData.template.communication_channels.email.type === 'opt-in' ? 'opt-out' : 'opt-in')}>
+                    {formData.template.communication_channels.email.type === 'opt-in' ? 
                         "Opt In"
                         :
                         "Opt Out"
@@ -1857,7 +1916,7 @@ export default function CreateClaimFreeProductTemplate({
                     className="text-sm leading-6 text-gray-900 dark:text-white flex w-full"
                   >
                     <InlineEditableText
-                      value={formData.template.communication_preferences.email.label}
+                      value={formData.template.communication_channels.email.label}
                       onChange={(value) => handleCommunicationPreferenceChange('email', 'label', value)}
                       className="text-sm leading-6 text-gray-900 dark:text-white pt-[0.09rem]"
                       placeholder="Enter email communication label..."
@@ -1868,15 +1927,15 @@ export default function CreateClaimFreeProductTemplate({
 
                 {/* SMS Preference */}
                 <div className="flex items-center shrink-0 gap-x-2">
-                  <div className="inline h-6 w-6 -mt-1 cursor-pointer" onClick={() => handleCommunicationPreferenceChange('sms', 'enabled', !formData.template.communication_preferences.sms.enabled)}>
-                    {formData.template.communication_preferences.sms.enabled ? (
+                  <div className="inline h-6 w-6 -mt-1 cursor-pointer" onClick={() => handleCommunicationPreferenceChange('sms', 'enabled', !formData.template.communication_channels.sms.enabled)}>
+                    {formData.template.communication_channels.sms.enabled ? (
                       <CheckCircleIcon className="h-6 w-6 text-green-500 inline" title='Enabled' />
                     ) : (
                       <XCircleIcon className="h-6 w-6 text-red-500 inline" title='Disabled' />
                     )}
                   </div>
-                  <button title={formData.template.communication_preferences.sms.type === 'opt-in' ? 'Opt In' : 'Opt Out'} className="bg-gray-100 border-gray-300 hover:bg-gray-200 border px-2 rounded h-6 shrink-0 text-sm font-semibold min-w-[4.5rem]" onClick={() => handleCommunicationPreferenceChange('sms', 'type', formData.template.communication_preferences.sms.type === 'opt-in' ? 'opt-out' : 'opt-in')}>
-                    {formData.template.communication_preferences.sms.type === 'opt-in' ? 
+                  <button title={formData.template.communication_channels.sms.type === 'opt-in' ? 'Opt In' : 'Opt Out'} className="bg-gray-100 border-gray-300 hover:bg-gray-200 border px-2 rounded h-6 shrink-0 text-sm font-semibold min-w-[4.5rem]" onClick={() => handleCommunicationPreferenceChange('sms', 'type', formData.template.communication_channels.sms.type === 'opt-in' ? 'opt-out' : 'opt-in')}>
+                    {formData.template.communication_channels.sms.type === 'opt-in' ? 
                         "Opt In"
                         :
                         "Opt Out"
@@ -1888,7 +1947,7 @@ export default function CreateClaimFreeProductTemplate({
                     className="text-sm leading-6 text-gray-900 dark:text-white flex w-full"
                   >
                     <InlineEditableText
-                      value={formData.template.communication_preferences.sms.label}
+                      value={formData.template.communication_channels.sms.label}
                       onChange={(value) => handleCommunicationPreferenceChange('sms', 'label', value)}
                       className="text-sm leading-6 text-gray-900 dark:text-white pt-[0.09rem]"
                       placeholder="Enter SMS communication label..."

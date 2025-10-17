@@ -31,6 +31,7 @@
         "lottie-colorify": "^0.8.0",
         "lottie-react": "^2.4.1",
         "number-to-words": "^1.2.4",
+        "qrcode": "^1.5.4",
         "react": "^18.2.0",
         "react-color": "^2.19.3",
         "react-colorful": "^5.6.1",
