@@ -4,6 +4,7 @@ import SelectInput from '../../Components/Forms/SelectInput';
 import CheckboxGroupInput from '../../Components/Forms/CheckboxGroupInput';
 import ColorInput from '../../Components/Forms/ColorInput';
 import InlineEditableText from '../../Components/Forms/InlineEditableText';
+import SelectControl from '../../Components/Controls/SelectControl';
 import ScrollHint from '../../Components/Hints/ScrollHint';
 import Lottie from 'lottie-react';
 import { getColors, replaceColor } from 'lottie-colorify';
@@ -76,6 +77,7 @@ export default function CreateClaimFreeProductTemplate({
   // Preview dialog state
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewing, setPreviewing] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   const generatePreview = async (templateData) => {
     setPreviewing(true);
@@ -208,6 +210,18 @@ export default function CreateClaimFreeProductTemplate({
   // Register LDRS component
   useEffect(() => {
     ring.register();
+  }, []);
+
+  // Mobile detection
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024); // lg breakpoint
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   // Inject custom theme colors
@@ -916,7 +930,7 @@ export default function CreateClaimFreeProductTemplate({
   return (
     <div className="h-screen bg-gray-200 dark:bg-gray-900 relative overflow-hidden">
       {/* Fixed Right Sidebar - Substitution Key */}
-      {previewMode !== 'success' && (
+      {previewMode !== 'success' && !isMobile && (
         <div className="fixed top-16 right-0 w-80 h-[calc(100vh-4rem)] bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 shadow-lg z-[999] overflow-y-auto">
         <div className="p-6">
           <div className="flex items-center space-x-2 mb-6">
@@ -987,13 +1001,14 @@ export default function CreateClaimFreeProductTemplate({
         onClose={() => setIsPreviewOpen(false)}
         templateData={formData}
         onGeneratePreview={generatePreview}
+        className={isMobile ? '' : 'right-80'}
       />
       
       {/* Template Configuration Header */}
       {previewMode !== 'success' && (
         <div className="fixed top-0 left-0 right-0 z-[1000] bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
         <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between h-16">
+          <div className="flex items-center justify-between h-16 px-4">
             
             {/* Template Name */}
             <div className="flex items-center space-x-3">
@@ -1005,70 +1020,125 @@ export default function CreateClaimFreeProductTemplate({
 
             {/* Center Controls */}
             <div className="flex items-center space-x-6">
-              {/* Preview Mode Buttons */}
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-500 dark:text-gray-400 mr-3 hidden lg:block">Configure:</span>
+              {/* Preview Mode Controls */}
+              {isMobile ? (
+                <div className="flex items-center space-x-3">
+                  {/* <span className="text-sm text-gray-500 dark:text-gray-400">Configure:</span> */}
+                  <SelectControl
+                    id="preview-mode-select"
+                    items={[
+                      {
+                        id: 'prerequisites',
+                        value: 'prerequisites',
+                        displayValue: 'Prerequisites',
+                        icon: ClipboardDocumentListIcon
+                      },
+                      {
+                        id: 'loading',
+                        value: 'loading',
+                        displayValue: 'Loading',
+                        icon: CogIcon
+                      },
+                      {
+                        id: 'form',
+                        value: 'form',
+                        displayValue: 'Form',
+                        icon: DocumentTextIcon
+                      },
+                      {
+                        id: 'completed',
+                        value: 'completed',
+                        displayValue: 'Completed',
+                        icon: CheckCircleIcon
+                      },
+                      {
+                        id: 'expired',
+                        value: 'expired',
+                        displayValue: 'Expired',
+                        icon: ClockIcon
+                      }
+                    ]}
+                    defaultSelected={{
+                      id: previewMode,
+                      value: previewMode,
+                      displayValue: previewMode.charAt(0).toUpperCase() + previewMode.slice(1),
+                      icon: previewMode === 'prerequisites' ? ClipboardDocumentListIcon :
+                            previewMode === 'loading' ? CogIcon :
+                            previewMode === 'form' ? DocumentTextIcon :
+                            previewMode === 'completed' ? CheckCircleIcon :
+                            previewMode === 'expired' ? ClockIcon : null
+                    }}
+                    onSelectChange={(selection) => handlePreviewModeChange(selection.value)}
+                    placeholder="Select mode"
+                    width="min-w-[160px]"
+                    showIcons={true}
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-500 dark:text-gray-400 mr-3 hidden lg:block">Configure:</span>
 
-                <button
-                  onClick={() => handlePreviewModeChange('prerequisites')}
-                  className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    previewMode === 'prerequisites'
-                      ? 'bg-theme-100 text-theme-800 dark:bg-theme-900 dark:text-theme-200'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                  }`}
-                >
-                  <ClipboardDocumentListIcon className="h-4 w-4 mr-1.5" />
-                  Prerequisites
-                </button>
-                
-                <button
-                  onClick={() => handlePreviewModeChange('loading')}
-                  className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    previewMode === 'loading'
-                      ? 'bg-theme-100 text-theme-800 dark:bg-theme-900 dark:text-theme-200'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                  }`}
-                >
-                  <CogIcon className="h-4 w-4 mr-1.5" />
-                  Loading
-                </button>
+                  <button
+                    onClick={() => handlePreviewModeChange('prerequisites')}
+                    className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      previewMode === 'prerequisites'
+                        ? 'bg-theme-100 text-theme-800 dark:bg-theme-900 dark:text-theme-200'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    <ClipboardDocumentListIcon className="h-4 w-4 mr-1.5" />
+                    Prerequisites
+                  </button>
+                  
+                  <button
+                    onClick={() => handlePreviewModeChange('loading')}
+                    className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      previewMode === 'loading'
+                        ? 'bg-theme-100 text-theme-800 dark:bg-theme-900 dark:text-theme-200'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    <CogIcon className="h-4 w-4 mr-1.5" />
+                    Loading
+                  </button>
 
-                <button
-                  onClick={() => handlePreviewModeChange('form')}
-                  className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    previewMode === 'form'
-                      ? 'bg-theme-100 text-theme-800 dark:bg-theme-900 dark:text-theme-200'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                  }`}
-                >
-                  <DocumentTextIcon className="h-4 w-4 mr-1.5" />
-                  Form
-                </button>
+                  <button
+                    onClick={() => handlePreviewModeChange('form')}
+                    className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      previewMode === 'form'
+                        ? 'bg-theme-100 text-theme-800 dark:bg-theme-900 dark:text-theme-200'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    <DocumentTextIcon className="h-4 w-4 mr-1.5" />
+                    Form
+                  </button>
 
-                <button
-                  onClick={() => handlePreviewModeChange('completed')}
-                  className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    previewMode === 'completed'
-                      ? 'bg-theme-100 text-theme-800 dark:bg-theme-900 dark:text-theme-200'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                  }`}
-                >
-                  <CheckCircleIcon className="h-4 w-4 mr-1.5" />
-                  Completed
-                </button>
+                  <button
+                    onClick={() => handlePreviewModeChange('completed')}
+                    className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      previewMode === 'completed'
+                        ? 'bg-theme-100 text-theme-800 dark:bg-theme-900 dark:text-theme-200'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    <CheckCircleIcon className="h-4 w-4 mr-1.5" />
+                    Completed
+                  </button>
 
-                <button
-                  onClick={() => handlePreviewModeChange('expired')}
-                  className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    previewMode === 'expired'
-                      ? 'bg-theme-100 text-theme-800 dark:bg-theme-900 dark:text-theme-200'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                  }`}
-                >
-                  <ClockIcon className="h-4 w-4 mr-1.5" />
-                  Expired
-                </button>
-              </div>
+                  <button
+                    onClick={() => handlePreviewModeChange('expired')}
+                    className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      previewMode === 'expired'
+                        ? 'bg-theme-100 text-theme-800 dark:bg-theme-900 dark:text-theme-200'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    <ClockIcon className="h-4 w-4 mr-1.5" />
+                    Expired
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Action Buttons */}
@@ -1084,15 +1154,15 @@ export default function CreateClaimFreeProductTemplate({
                   error={errors['template.theme_colour']}
                 />
               </div>
-              <button onClick={() => setIsPreviewOpen(true)} className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600">
-                <EyeIcon className="h-4 w-4 mr-1.5" />
-                Preview Link
+              <button onClick={() => setIsPreviewOpen(true)} className={`min-h-10 inline-flex items-center text-nowrap ${isMobile ? 'px-3' : 'px-4'} py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600`}>
+                <EyeIcon className="h-4 w-4" />
+                {!isMobile && <span className="ml-1.5">Preview Link</span>}
               </button>
               <button 
                 onClick={handleSaveTemplate}
-                className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-theme-600 border border-transparent rounded-md hover:bg-theme-700 dark:bg-theme-700 dark:hover:bg-theme-600"
+                className="inline-flex items-center text-nowrap min-h-10 px-4 py-2 text-sm font-medium text-white bg-theme-600 border border-transparent rounded-md hover:bg-theme-700 dark:bg-theme-700 dark:hover:bg-theme-600"
               >
-                Save Template
+                Save {!isMobile && 'Template'}
               </button>
             </div>
           </div>
@@ -1104,7 +1174,7 @@ export default function CreateClaimFreeProductTemplate({
       <div className="">
         {/* Loading Screen Overlay */}
         <div 
-          className={`fixed top-16 left-0 right-80 bottom-0 flex items-center justify-center z-50 bg-gray-200 dark:bg-gray-900 transition-all duration-300 ${
+          className={`fixed top-16 left-0 ${isMobile ? 'right-0' : 'right-80'} bottom-0 flex items-center justify-center z-50 bg-gray-200 dark:bg-gray-900 transition-all duration-300 ${
             previewMode === 'loading' && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
         >
@@ -1161,7 +1231,7 @@ export default function CreateClaimFreeProductTemplate({
 
       {/* Completion Screen Overlay */}
       <div 
-        className={`fixed top-16 left-0 right-80 bottom-0 flex items-center justify-center z-50 bg-gray-200 dark:bg-gray-900 transition-all duration-300 ${
+        className={`fixed top-16 left-0 ${isMobile ? 'right-0' : 'right-80'} bottom-0 flex items-center justify-center z-50 bg-gray-200 dark:bg-gray-900 transition-all duration-300 ${
           previewMode === 'completed' && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
@@ -1275,7 +1345,7 @@ export default function CreateClaimFreeProductTemplate({
 
       {/* Expired Screen Overlay */}
       <div 
-        className={`fixed top-16 left-0 right-80 bottom-0 flex items-center justify-center z-50 bg-gray-200 dark:bg-gray-900 transition-all duration-300 ${
+        className={`fixed top-16 left-0 ${isMobile ? 'right-0' : 'right-80'} bottom-0 flex items-center justify-center z-50 bg-gray-200 dark:bg-gray-900 transition-all duration-300 ${
           previewMode === 'expired' && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
@@ -1338,7 +1408,7 @@ export default function CreateClaimFreeProductTemplate({
       {/* Prerequisites Content */}
       <div 
         ref={prerequisitesScrollRef}
-        className={`fixed top-16 left-0 right-80 bottom-0 overflow-y-auto z-40 bg-gray-200 dark:bg-gray-900 transition-all duration-300 ${
+        className={`fixed top-16 left-0 ${isMobile ? 'right-0' : 'right-80'} bottom-0 overflow-y-auto z-40 bg-gray-200 dark:bg-gray-900 transition-all duration-300 ${
           previewMode === 'prerequisites' && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
@@ -1577,7 +1647,7 @@ export default function CreateClaimFreeProductTemplate({
       {/* Main Form Content */}
       <div 
          ref={formScrollRef}
-        className={`fixed top-16 left-0 right-80 bottom-0 overflow-y-auto z-40 bg-gray-200 dark:bg-gray-900 transition-all duration-300 ${
+        className={`fixed top-16 left-0 ${isMobile ? 'right-0' : 'right-80'} bottom-0 overflow-y-auto z-40 bg-gray-200 dark:bg-gray-900 transition-all duration-300 ${
           previewMode === 'form' && !isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >

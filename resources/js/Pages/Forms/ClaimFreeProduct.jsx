@@ -31,7 +31,8 @@ import {
   BuildingOfficeIcon,
   IdentificationIcon,
   GiftIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline';
 import { ring } from 'ldrs';
 
@@ -76,8 +77,8 @@ export default function ProductCapture({
         }))
     : [];
 
-  // Loading state for initial page load - initialize based on status to prevent flashing
-  const [isLoading, setIsLoading] = useState(status !== 'completed' && status !== 'processing');
+    // Loading state for initial page load - initialize based on status to prevent flashing
+  const [isLoading, setIsLoading] = useState(status !== 'completed' && status !== 'processing' && status !== 'testing');
   const [isLoaded, setIsLoaded] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [animationDataLoading, setAnimationDataLoading] = useState(null);
@@ -85,8 +86,13 @@ export default function ProductCapture({
   
   // Completion state for form submission - initialize to true if status is completed or processing
   const [isCompleted, setIsCompleted] = useState(status === 'completed' || status === 'processing');
+  
+  // Preview mode detection
+  const isPreviewMode = status === 'testing';
   const [isCompletionTransitioning, setIsCompletionTransitioning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [animationKey, setAnimationKey] = useState(0);
+  const [isResetTransitioning, setIsResetTransitioning] = useState(false);
 
   // Ref for scroll hint
   const scrollRef = useRef(null);
@@ -205,11 +211,6 @@ export default function ProductCapture({
   // Use temporary paths if available, otherwise use standard paths
   const displayImage = (client_image_path ? r2bucketURL + client_image_path + client_image : null) || (client_image ? r2bucketURL + 'clients/images/logos/' + client_image : null);
   const productImage = (product_image_path ? r2bucketURL + product_image_path + product_image : null) || (product_image ? r2bucketURL + 'clients/images/products/' + product_image : null);
-
-  console.log(client_image_path);
-  console.log(product_image_path);
-  console.log(displayImage);
-  console.log(productImage);
 
   const displayClientName = client_name;
   const displayProductName = product_name;
@@ -477,6 +478,45 @@ export default function ProductCapture({
     setErrors({});
   };
 
+  // Reset function for preview mode
+  const handleReset = () => {
+    // Set reset transitioning to cover the screen immediately
+    setIsResetTransitioning(true);
+    
+    // Immediately set loading state to hide form content
+    setIsLoading(true);
+    setIsCompleted(false);
+    setIsCompletionTransitioning(false);
+    setIsSubmitting(false);
+    
+    // Clear form data and errors immediately
+    setFormData({
+      title: '',
+      firstName: '',
+      surname: '',
+      address: {
+        line1: '',
+        line2: '',
+        line3: '',
+        city: '',
+        county: '',
+        postcode: '',
+        country: 'United Kingdom'
+      },
+      communicationPreferences: []
+    });
+    setErrors({});
+    
+    // Start the loading animation sequence
+    setTimeout(() => {
+      setIsTransitioning(true);
+      setIsResetTransitioning(false); // Remove cover once loading screen is showing
+      setTimeout(() => {
+        setIsLoading(false);
+      }, 400);
+    }, 1600);
+  };
+
   // Separate handler for postcode search that only updates form fields, not search field
   const handlePostcodeSearch = (addressData) => {
     // Update form fields but don't update the search field itself
@@ -523,9 +563,31 @@ export default function ProductCapture({
       }, 0); // Use setTimeout with 0ms to wait for next tick
       return;
     }
-    
+        
+    // Preview mode: simulate submission without actual API call
+    if (isPreviewMode) {
+      setIsSubmitting(true);
+      
+      // Simulate processing time
+      setTimeout(() => {
+        // Clear any previous errors
+        setErrors({});
+        
+        // Start completion transition
+        setIsCompletionTransitioning(true);
+        
+        // After fade out, show completion screen
+        setTimeout(() => {
+          setIsCompleted(true);
+          setIsSubmitting(false);
+        }, 400);
+      }, 1500); // Simulate 1.5 second processing time
+      
+      return;
+    }
+
     setIsSubmitting(true);
-    
+
     // Sanitize form data before sending to backend
     const sanitizedData = sanitizeFormData(formData);
     
@@ -548,8 +610,6 @@ export default function ProductCapture({
       const data = await response.json();
       
       if (response.ok && data.success) {
-        console.log('Success:', data.message);
-        
         // Clear any previous errors
         setErrors({});
         
@@ -626,6 +686,21 @@ export default function ProductCapture({
 
   return (
     <div className="min-h-screen bg-gray-200 dark:bg-gray-900 relative">
+      {isPreviewMode && !isLoading && isCompleted && (
+        <button
+          onClick={handleReset}
+          className="absolute top-10 right-10 p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors duration-200 z-[1000]"
+          title="Reset Preview"
+        >
+          <ArrowPathIcon className="h-6 w-6" />
+        </button>
+      )}
+
+      {/* Cover div to prevent flashing during reset transition in preview mode */}
+      {isPreviewMode && isResetTransitioning && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-gray-200 dark:bg-gray-900 h-screen w-screen" />
+      )}
+
       {/* Loading Screen Overlay */}
       <div 
         className={`fixed inset-0 flex items-center justify-center z-50 bg-gray-200 dark:bg-gray-900 transition-opacity duration-400 h-screen w-screen ${
@@ -639,6 +714,7 @@ export default function ProductCapture({
               {/* Lottie Gift Animation */}
               {animationDataLoading && (
                 <Lottie
+                  key={`loading-${animationKey}`}
                   animationData={animationDataLoading}
                   loop
                   autoplay
@@ -740,14 +816,17 @@ export default function ProductCapture({
                          isCompletionTransitioning ? '0s' : '0s' 
         }}>
           <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-            <div className="text-center">
-              {shouldShowClientImage && (
-                <img
-                  alt={displayClientName}
-                  src={displayImage}
-                  className="mx-auto h-16 w-auto mb-2"
-                />
-              )}
+            <div className="relative">
+              {/* Reset button for preview mode */}
+              <div className="text-center">
+                {shouldShowClientImage && (
+                  <img
+                    alt={displayClientName}
+                    src={displayImage}
+                    className="mx-auto h-16 w-auto mb-2"
+                  />
+                )}
+              </div>
             </div>
           </div>
         </header>

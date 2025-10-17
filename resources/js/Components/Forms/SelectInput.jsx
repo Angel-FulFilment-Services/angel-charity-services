@@ -15,11 +15,16 @@ export default function SelectInput(props) {
   const optionsRef = useRef(null);
 
   useEffect(() => {
-    if (currentState && items) {
-      const foundItem = items.find(item => item.value === currentState);
-      if (foundItem) {
-        setSelected(foundItem);
-      } 
+    if (items) {
+      if (currentState) {
+        const foundItem = items.find(item => item.value === currentState);
+        if (foundItem) {
+          setSelected(foundItem);
+        }
+      } else {
+        // Clear the selected state when currentState is empty
+        setSelected({id: id, value: ''});
+      }
     }
   }, [currentState, items, id]);
 

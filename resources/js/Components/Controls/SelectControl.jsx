@@ -7,8 +7,8 @@ function classNames(...classes) {
   return classes.filter(Boolean).join(' ');
 }
 
-export default function SelectInput(props) {
-  const { id, items, onSelectChange, placeholder, defaultSelected, label, width = "w-full" } = props;
+export default function SelectControl(props) {
+  const { id, items, onSelectChange, placeholder, defaultSelected, label, width = "w-full", showIcons = false } = props;
   
   const [selected, setSelected] = useState(defaultSelected || '');
 
@@ -27,9 +27,14 @@ export default function SelectInput(props) {
         <div className="w-full">
           {label ? <Listbox.Label className="block text-sm font-medium leading-6 text-gray-900 dark:text-dark-100 mb-2">{label}</Listbox.Label> : null}
           <div className="relative w-full">
-            <Listbox.Button className={`relative cursor-default rounded-md bg-white dark:bg-dark-900 py-1.5 pl-3 pr-10 text-left text-gray-900 dark:text-dark-100 shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-dark-600 focus:outline-none focus:ring-2 focus:ring-theme-600 dark:focus:ring-theme-700 sm:text-sm sm:leading-6 ${width}`}>
-              <span className={`block truncate ${!selected.value && "text-gray-400 dark:text-dark-500"}`}>
-                {selected.displayValue ? selected.displayValue : placeholder}
+            <Listbox.Button className={`relative cursor-default rounded-md bg-white dark:bg-dark-900 py-1.5 ${showIcons && selected.icon ? 'pl-3' : 'pl-3'} pr-10 text-left text-gray-900 dark:text-dark-100 shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-dark-600 focus:outline-none focus:ring-2 focus:ring-theme-600 dark:focus:ring-theme-700 sm:text-sm sm:leading-6 ${width}`}>
+              <span className={`flex items-center ${!selected.value && "text-gray-400 dark:text-dark-500"}`}>
+                {showIcons && selected.icon && (
+                  <selected.icon className="h-4 w-4 mr-2 text-gray-400 dark:text-dark-500" />
+                )}
+                <span className="block truncate">
+                  {selected.displayValue ? selected.displayValue : placeholder}
+                </span>
               </span>
               <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
                 <ChevronUpDownIcon className="h-5 w-5 text-gray-400 dark:text-dark-500" aria-hidden="true" />
@@ -57,9 +62,17 @@ export default function SelectInput(props) {
                   >
                     {({ selected, active }) => (
                       <>
-                        <span className={classNames(selected ? 'font-semibold' : 'font-normal', 'block truncate')}>
-                          {item.displayValue}
-                        </span>
+                        <div className="flex items-center">
+                          {showIcons && item.icon && (
+                            <item.icon className={classNames(
+                              active ? 'text-gray-900 dark:text-dark-100' : 'text-gray-400 dark:text-dark-500',
+                              'h-4 w-4 mr-2'
+                            )} />
+                          )}
+                          <span className={classNames(selected ? 'font-semibold' : 'font-normal', 'block truncate')}>
+                            {item.displayValue}
+                          </span>
+                        </div>
                         {selected ? (
                           <span
                             className={classNames(
@@ -83,12 +96,13 @@ export default function SelectInput(props) {
   );
 }
 
-SelectInput.propTypes = {
+SelectControl.propTypes = {
   id: PropTypes.string.isRequired,
   items: PropTypes.arrayOf(PropTypes.shape({
     id: PropTypes.string.isRequired,
     value: PropTypes.string.isRequired,
     displayValue: PropTypes.string.isRequired,
+    icon: PropTypes.elementType,
   })).isRequired,
   onSelectChange: PropTypes.func.isRequired,
   placeholder: PropTypes.string,
@@ -96,12 +110,15 @@ SelectInput.propTypes = {
     id: PropTypes.string.isRequired,
     value: PropTypes.string.isRequired,
     displayValue: PropTypes.string.isRequired,
+    icon: PropTypes.elementType,
   }),
   label: PropTypes.string,
+  showIcons: PropTypes.bool,
 };
 
-SelectInput.defaultProps = {
+SelectControl.defaultProps = {
   placeholder: 'Select an option',
   defaultSelected: null,
   label: null,
+  showIcons: false,
 };

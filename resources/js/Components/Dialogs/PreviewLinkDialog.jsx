@@ -9,7 +9,8 @@ export default function PreviewLinkDialog({
   isOpen, 
   onClose, 
   templateData,
-  onGeneratePreview 
+  onGeneratePreview,
+  className = ''
 }) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [previewData, setPreviewData] = useState(null);
@@ -94,7 +95,7 @@ export default function PreviewLinkDialog({
           <div className="fixed inset-0 bg-black bg-opacity-25" />
         </Transition.Child>
 
-        <div className="fixed inset-0 overflow-y-auto">
+        <div className={`fixed inset-0 overflow-y-auto ${className}`}>
           <div className="flex min-h-full items-center justify-center p-4 text-center">
             <Transition.Child
               as={Fragment}
