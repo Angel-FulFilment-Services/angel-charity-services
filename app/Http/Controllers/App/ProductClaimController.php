@@ -370,6 +370,118 @@ class ProductClaimController extends Controller
     }
 
     /**
+     * Generate a testing preview customer and return preview URLs
+     * Protected via api.token middleware
+     */
+    public function previewTemplate(Request $request)
+    {
+        try {
+            // Reuse validation rules from preload_customer_information but allow testing flag
+            $validated = $request->validate([
+                'GUID' => 'required|string|uuid',
+                'title' => 'required|string|max:10',
+                'surname' => 'required|string|max:100',
+                'ngn' => 'nullable|string|max:100',
+                'template_id' => 'nullable|integer|exists:product_claim_templates,id',
+                'client_ref' => 'nullable|string|max:100',
+                'client_name' => 'nullable|string|max:255',
+                'client_image' => 'nullable|string|max:500',
+                'client_url' => 'nullable|url|max:500',
+                'contact_url' => 'nullable|url|max:500',
+                'privacy_url' => 'nullable|url|max:500',
+                'theme_colour' => ['nullable', 'string', 'regex:/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/'],
+                'product_title' => 'nullable|string|max:500',
+                'product_message' => 'nullable|string|max:1000',
+                'product_name' => 'nullable|string|max:255',
+                'product_image' => 'nullable|string|max:500',
+                'loading_title' => 'nullable|string|max:500',
+                'loading_message' => 'nullable|string|max:1000',
+                'completed_title' => 'nullable|string|max:500',
+                'completed_message' => 'nullable|string|max:1000',
+                'expired_title' => 'nullable|string|max:500',
+                'expired_message' => 'nullable|string|max:1000',
+                'communication_channels' => 'nullable|array',
+                'communication_channels.*.channel' => 'required_with:communication_channels|string|max:50',
+                'communication_channels.*.label' => 'required_with:communication_channels|string|max:255',
+                'communication_channels.*.type' => 'nullable|string|in:opt-in,opt-out',
+                'privacy_notice' => 'nullable|string|max:2000',
+                'testing' => 'nullable|boolean'
+            ]);
+
+            // If GUID already exists, return conflict
+            if (Customer::where('guid', $validated['GUID'])->exists()) {
+                return response()->json(['status' => 'error', 'message' => 'GUID already exists'], 409);
+            }
+
+            // Prepare customer data - copy template fields or use overrides
+            $customerData = [
+                'guid' => $validated['GUID'],
+                'template_id' => $validated['template_id'] ?? null,
+                'title' => $validated['title'],
+                'surname' => $validated['surname'],
+                'communication_channels' => $validated['communication_channels'] ?? null,
+                'privacy_notice' => $validated['privacy_notice'] ?? null,
+                'status' => (isset($validated['testing']) && $validated['testing']) ? 'testing' : 'pending',
+            ];
+
+            // If template_id provided, fill from template
+            if (!empty($validated['template_id'])) {
+                $template = Template::find($validated['template_id']);
+                if ($template) {
+                    $templateFields = [
+                        'client_ref', 'client_name', 'client_image', 'client_url', 'contact_url', 'privacy_url',
+                        'theme_colour', 'product_title', 'product_message', 'product_name', 'product_image',
+                        'loading_title', 'loading_message', 'completed_title', 'completed_message', 'expired_title', 'expired_message'
+                    ];
+
+                    foreach ($templateFields as $field) {
+                        if (isset($validated[$field]) && !is_null($validated[$field])) {
+                            $customerData[$field] = $validated[$field];
+                        } else {
+                            $customerData[$field] = $template->{$field};
+                        }
+                    }
+                }
+            } else {
+                $templateFields = [
+                    'client_ref', 'client_name', 'client_image', 'client_url', 'contact_url', 'privacy_url',
+                    'theme_colour', 'product_title', 'product_message', 'product_name', 'product_image',
+                    'loading_title', 'loading_message', 'completed_title', 'completed_message', 'expired_title', 'expired_message'
+                ];
+                foreach ($templateFields as $field) {
+                    if (isset($validated[$field]) && !is_null($validated[$field])) {
+                        $customerData[$field] = $validated[$field];
+                    }
+                }
+            }
+
+            // Create temporary customer record
+            $customer = Customer::create($customerData);
+
+            // Generate signed URL (valid for 2 hours) and short URL
+            $expiryTime = now()->addHours(2);
+            $url = URL::temporarySignedRoute('product.claim', $expiryTime, ['guid' => $customer->guid]);
+            $shortUrl = ShortURL::destinationUrl($url)->secure()->trackVisits(false)->deactivateAt($expiryTime)->make()->default_short_url;
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'url' => $url,
+                    'short_url' => $shortUrl,
+                    'expires_at' => $expiryTime->toISOString(),
+                    'customer_id' => $customer->id
+                ]
+            ], 201);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['status' => 'error', 'message' => 'Validation failed', 'errors' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            Log::error('Failed to generate preview template', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString(), 'request' => $request->all()]);
+            return response()->json(['status' => 'error', 'message' => 'Internal error'], 500);
+        }
+    }
+
+    /**
      * Get customer callback data and mark as completed
      */
     public function get_callback($guid)
